@@ -8,7 +8,7 @@
         }
     ],
     "navigationFallback": {
-        "rewrite": "/afp_prima_ke.html"
+        "rewrite": "/index.html"
     },
     "globalHeaders": {
         "Access-Control-Allow-Origin": "*",
