@@ -3,7 +3,7 @@ import logging
 import os
 import azure.functions as func
 from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.core.credentials import AzureKeyCredential
 from azure.core.exceptions import AzureError
 
 
@@ -39,6 +39,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         # Get configuration from environment variables
         endpoint = os.environ.get("AZURE_EXISTING_AIPROJECT_ENDPOINT")
         agent_id = os.environ.get("AZURE_EXISTING_AGENT_ID")
+        api_key = os.environ.get("AZURE_AI_PROJECT_API_KEY")
 
         # DEBUG: Log all environment variables (sin mostrar valores sensibles)
         env_vars = {
@@ -54,15 +55,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         if not endpoint or not agent_id:
             logging.error(
-                f"Missing environment variables. Endpoint: {bool(endpoint)}, Agent ID: {bool(agent_id)}"
+                f"Missing environment variables. Endpoint: {bool(endpoint)}, Agent ID: {bool(agent_id)}, API Key: {bool(api_key)}"
             )
-            logging.error(
-                f"AZURE_EXISTING_AIPROJECT_ENDPOINT: {'SET' if endpoint else 'NOT SET'}"
-            )
-            logging.error(
-                f"AZURE_EXISTING_AGENT_ID: {'SET' if agent_id else 'NOT SET'}"
-            )
-
             return func.HttpResponse(
                 json.dumps(
                     {
@@ -70,7 +64,21 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                         "debug": {
                             "endpoint_set": bool(endpoint),
                             "agent_id_set": bool(agent_id),
+                            "api_key_set": bool(api_key),
                         },
+                    }
+                ),
+                status_code=500,
+                headers=headers,
+            )
+
+        if not api_key:
+            logging.error("AZURE_AI_PROJECT_API_KEY environment variable not set")
+            return func.HttpResponse(
+                json.dumps(
+                    {
+                        "error": "Server configuration error. Missing API key.",
+                        "debug": {"api_key_set": bool(api_key)},
                     }
                 ),
                 status_code=500,
@@ -79,58 +87,17 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         logging.info(f"Using endpoint: {endpoint}")
         logging.info(f"Using agent ID: {agent_id}")
+        logging.info("Using API Key authentication")
 
-        # Try different credential types for Azure Functions
-        credential = None
-        credential_type = "unknown"
-
+        # Initialize Azure AI Project Client with API Key
         try:
-            # Try Managed Identity first (recommended for Azure Functions)
-            credential = ManagedIdentityCredential()
-            credential_type = "ManagedIdentity"
-            logging.info("Using ManagedIdentityCredential")
+            credential = AzureKeyCredential(api_key)
 
-            # Test credential by getting a token
-            token = credential.get_token("https://cognitiveservices.azure.com/.default")
-            logging.info(f"Successfully obtained token with {credential_type}")
-
-        except Exception as e:
-            logging.warning(f"ManagedIdentityCredential failed: {e}")
-            try:
-                # Fallback to DefaultAzureCredential
-                credential = DefaultAzureCredential()
-                credential_type = "DefaultAzureCredential"
-                logging.info("Using DefaultAzureCredential")
-
-                # Test credential by getting a token
-                token = credential.get_token(
-                    "https://cognitiveservices.azure.com/.default"
-                )
-                logging.info(f"Successfully obtained token with {credential_type}")
-
-            except Exception as e2:
-                logging.error(f"All credential methods failed: {e2}")
-                return func.HttpResponse(
-                    json.dumps(
-                        {
-                            "error": "Authentication configuration error",
-                            "debug": {
-                                "managed_identity_error": str(e),
-                                "default_credential_error": str(e2),
-                            },
-                        }
-                    ),
-                    status_code=500,
-                    headers=headers,
-                )
-
-        # Initialize Azure AI Project Client
-        try:
             project = AIProjectClient(
                 credential=credential,
                 endpoint=endpoint,
             )
-            logging.info("Successfully initialized AIProjectClient")
+            logging.info("Successfully initialized AIProjectClient with API Key")
         except Exception as e:
             logging.error(f"Failed to initialize AIProjectClient: {e}")
             return func.HttpResponse(
@@ -140,7 +107,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                         "debug": {
                             "details": str(e),
                             "endpoint": endpoint,
-                            "credential_type": credential_type,
+                            "credential_type": "APIKey",
                         },
                     }
                 ),
