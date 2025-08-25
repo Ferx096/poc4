@@ -376,7 +376,7 @@
 
     <script>
         let chatOpen = false;
-        const API_ENDPOINT = 'https://proud-moss-0e645580f.2.azurestaticapps.net/api/chat'; // Cambia por tu endpoint de Azure Static Web Apps
+        const API_ENDPOINT = 'https://proud-moss-0e645580f.2.azurestaticapps.net/api/chat';
 
         function toggleChat() {
             const chatWindow = document.getElementById('chatWindow');
@@ -395,6 +395,7 @@
             }
         }
 
+        // FUNCIÓN ACTUALIZADA CON MEJOR DEBUGGING
         async function sendMessage() {
             const chatInput = document.getElementById('chatInput');
             const sendBtn = document.getElementById('sendBtn');
@@ -422,15 +423,33 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
+                console.log('Sending request to:', API_ENDPOINT);
+                console.log('Message:', message);
+
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                     },
                     body: JSON.stringify({ message: message }),
                 });
 
-                const data = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                const contentType = response.headers.get('content-type');
+                let data;
+
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const textResponse = await response.text();
+                    console.error('Non-JSON response:', textResponse);
+                    throw new Error('Server returned non-JSON response');
+                }
+
+                console.log('Response data:', data);
 
                 // Hide typing indicator
                 typingIndicator.style.display = 'none';
@@ -442,19 +461,30 @@
                     botMessage.textContent = data.response;
                     chatMessages.appendChild(botMessage);
                 } else {
-                    // Add error message
+                    // Add error message with details
                     const errorMessage = document.createElement('div');
                     errorMessage.className = 'message bot';
-                    errorMessage.textContent = 'Lo siento, hubo un error. Por favor intenta nuevamente.';
+                    errorMessage.textContent = `Error (${response.status}): ${data.error || 'Error desconocido'}`;
+                    if (data.details) {
+                        console.error('Error details:', data.details);
+                    }
                     chatMessages.appendChild(errorMessage);
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Fetch error:', error);
                 typingIndicator.style.display = 'none';
 
                 const errorMessage = document.createElement('div');
                 errorMessage.className = 'message bot';
-                errorMessage.textContent = 'Lo siento, no pude conectarme al servidor. Verifica tu conexión.';
+
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    errorMessage.textContent = 'Error de red: No se pudo conectar al servidor. Verifica que el endpoint esté correcto.';
+                } else if (error.message.includes('JSON')) {
+                    errorMessage.textContent = 'Error: El servidor devolvió una respuesta inválida.';
+                } else {
+                    errorMessage.textContent = `Error inesperado: ${error.message}`;
+                }
+
                 chatMessages.appendChild(errorMessage);
             } finally {
                 // Re-enable input
