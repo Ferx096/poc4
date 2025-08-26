@@ -450,7 +450,10 @@
                 }
 
                 console.log('Response data:', data);
-
+                if (!response.ok) {
+                    console.log('Full error response:', data);
+                    alert('Error details: ' + JSON.stringify(data, null, 2));
+                }
                 // Hide typing indicator
                 typingIndicator.style.display = 'none';
 

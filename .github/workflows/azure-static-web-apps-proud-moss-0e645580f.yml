@@ -40,9 +40,10 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations ######
           app_location: "/" # App source code path
-          api_location: "api" # Api source code path
+          api_location: "api" # Api source code path - ESTO ES CRÍTICO
           output_location: "" # Built app content directory - optional
           skip_app_build: true # Skip the app build since it's static HTML
+          skip_api_build: false # ASEGÚRATE DE QUE ESTO NO ESTÉ EN TRUE
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
 

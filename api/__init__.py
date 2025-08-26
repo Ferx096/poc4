@@ -41,113 +41,91 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         agent_id = os.environ.get("AZURE_EXISTING_AGENT_ID")
         api_key = os.environ.get("AZURE_AI_PROJECT_API_KEY")
 
-        # DEBUG: Log all environment variables (sin mostrar valores sensibles)
-        env_vars = {
-            k: (
-                "***"
-                if "key" in k.lower() or "secret" in k.lower() or "token" in k.lower()
-                else v
-            )
-            for k, v in os.environ.items()
-            if k.startswith("AZURE")
-        }
-        logging.info(f"Available Azure environment variables: {list(env_vars.keys())}")
+        # Debug logging (sin exponer valores sensibles)
+        logging.info(f"Endpoint configured: {bool(endpoint)}")
+        logging.info(f"Agent ID configured: {bool(agent_id)}")
+        logging.info(f"API Key configured: {bool(api_key)}")
 
-        if not endpoint or not agent_id:
-            logging.error(
-                f"Missing environment variables. Endpoint: {bool(endpoint)}, Agent ID: {bool(agent_id)}, API Key: {bool(api_key)}"
-            )
-            return func.HttpResponse(
-                json.dumps(
-                    {
-                        "error": "Server configuration error. Missing environment variables.",
-                        "debug": {
-                            "endpoint_set": bool(endpoint),
-                            "agent_id_set": bool(agent_id),
-                            "api_key_set": bool(api_key),
-                        },
-                    }
-                ),
-                status_code=500,
-                headers=headers,
-            )
+        if endpoint:
+            logging.info(f"Using endpoint: {endpoint}")
+        if agent_id:
+            logging.info(f"Using agent ID: {agent_id}")
 
+        # Validar que todas las variables estén presentes
+        missing_vars = []
+        if not endpoint:
+            missing_vars.append("AZURE_EXISTING_AIPROJECT_ENDPOINT")
+        if not agent_id:
+            missing_vars.append("AZURE_EXISTING_AGENT_ID")
         if not api_key:
-            logging.error("AZURE_AI_PROJECT_API_KEY environment variable not set")
+            missing_vars.append("AZURE_AI_PROJECT_API_KEY")
+
+        if missing_vars:
+            error_msg = (
+                f"Missing required environment variables: {', '.join(missing_vars)}"
+            )
+            logging.error(error_msg)
             return func.HttpResponse(
                 json.dumps(
                     {
-                        "error": "Server configuration error. Missing API key.",
-                        "debug": {"api_key_set": bool(api_key)},
+                        "error": "Server configuration error",
+                        "missing_variables": missing_vars,
+                        "help": "Check Azure Static Web App environment variables in the portal",
                     }
                 ),
                 status_code=500,
                 headers=headers,
             )
-
-        logging.info(f"Using endpoint: {endpoint}")
-        logging.info(f"Using agent ID: {agent_id}")
-        logging.info("Using API Key authentication")
 
         # Initialize Azure AI Project Client with API Key
         try:
             credential = AzureKeyCredential(api_key)
-
             project = AIProjectClient(
                 credential=credential,
                 endpoint=endpoint,
             )
             logging.info("Successfully initialized AIProjectClient with API Key")
         except Exception as e:
-            logging.error(f"Failed to initialize AIProjectClient: {e}")
+            logging.error(f"Failed to initialize AIProjectClient: {str(e)}")
             return func.HttpResponse(
                 json.dumps(
                     {
                         "error": "Failed to initialize AI client",
-                        "debug": {
-                            "details": str(e),
-                            "endpoint": endpoint,
-                            "credential_type": "APIKey",
-                        },
+                        "details": str(e),
+                        "endpoint_provided": bool(endpoint),
                     }
                 ),
                 status_code=500,
                 headers=headers,
             )
 
-        # Get your agent
+        # Get the agent
         try:
             agent = project.agents.get_agent(agent_id)
             logging.info(f"Successfully retrieved agent: {agent.id}")
         except Exception as e:
-            logging.error(f"Failed to get agent: {e}")
+            logging.error(f"Failed to get agent {agent_id}: {str(e)}")
             return func.HttpResponse(
                 json.dumps(
                     {
                         "error": "Failed to retrieve agent",
-                        "debug": {
-                            "details": str(e),
-                            "agent_id": agent_id,
-                            "endpoint": endpoint,
-                        },
+                        "details": str(e),
+                        "agent_id": agent_id,
                     }
                 ),
                 status_code=500,
                 headers=headers,
             )
 
-        # Create a new thread for each conversation
+        # Create a new thread
         try:
             thread = project.agents.threads.create()
             logging.info(f"Created thread: {thread.id}")
         except Exception as e:
-            logging.error(f"Failed to create thread: {e}")
+            logging.error(f"Failed to create thread: {str(e)}")
             return func.HttpResponse(
                 json.dumps(
-                    {
-                        "error": "Failed to create conversation thread",
-                        "debug": {"details": str(e)},
-                    }
+                    {"error": "Failed to create conversation thread", "details": str(e)}
                 ),
                 status_code=500,
                 headers=headers,
@@ -160,15 +138,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             )
             logging.info(f"Created message in thread {thread.id}")
         except Exception as e:
-            logging.error(f"Failed to create message: {e}")
+            logging.error(f"Failed to create message: {str(e)}")
             return func.HttpResponse(
                 json.dumps(
                     {
                         "error": "Failed to create message",
-                        "debug": {
-                            "details": str(e),
-                            "thread_id": getattr(thread, "id", "unknown"),
-                        },
+                        "details": str(e),
+                        "thread_id": getattr(thread, "id", "unknown"),
                     }
                 ),
                 status_code=500,
@@ -182,32 +158,29 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             )
             logging.info(f"Agent run completed with status: {run.status}")
         except Exception as e:
-            logging.error(f"Failed to run agent: {e}")
+            logging.error(f"Failed to run agent: {str(e)}")
             return func.HttpResponse(
                 json.dumps(
                     {
                         "error": "Failed to process request with agent",
-                        "debug": {
-                            "details": str(e),
-                            "thread_id": getattr(thread, "id", "unknown"),
-                            "agent_id": agent_id,
-                        },
+                        "details": str(e),
+                        "thread_id": getattr(thread, "id", "unknown"),
                     }
                 ),
                 status_code=500,
                 headers=headers,
             )
 
+        # Check run status
         if run.status == "failed":
-            logging.error(f"Agent run failed: {run.last_error}")
+            error_details = getattr(run, "last_error", "Unknown error")
+            logging.error(f"Agent run failed: {error_details}")
             return func.HttpResponse(
                 json.dumps(
                     {
                         "error": "Agent processing failed",
-                        "debug": {
-                            "details": str(run.last_error),
-                            "run_status": run.status,
-                        },
+                        "details": str(error_details),
+                        "run_status": run.status,
                     }
                 ),
                 status_code=500,
@@ -221,15 +194,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 f"Retrieved {len(messages) if messages else 0} messages from thread"
             )
         except Exception as e:
-            logging.error(f"Failed to retrieve messages: {e}")
+            logging.error(f"Failed to retrieve messages: {str(e)}")
             return func.HttpResponse(
                 json.dumps(
                     {
                         "error": "Failed to retrieve response",
-                        "debug": {
-                            "details": str(e),
-                            "thread_id": getattr(thread, "id", "unknown"),
-                        },
+                        "details": str(e),
+                        "thread_id": getattr(thread, "id", "unknown"),
                     }
                 ),
                 status_code=500,
@@ -239,8 +210,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         # Extract the assistant's response
         assistant_response = ""
         if messages:
-            for msg in messages:
-                if msg.role == "assistant" and msg.text_messages:
+            # Buscar la respuesta más reciente del assistant
+            for msg in reversed(messages):  # Revisar en orden inverso
+                if (
+                    msg.role == "assistant"
+                    and hasattr(msg, "text_messages")
+                    and msg.text_messages
+                ):
                     assistant_response = msg.text_messages[-1].text.value
                     break
 
@@ -262,19 +238,28 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             json.dumps(
                 {
                     "error": "Azure service error",
-                    "debug": {"details": str(e), "type": "AzureError"},
+                    "details": str(e),
+                    "type": "AzureError",
                 }
             ),
             status_code=502,
             headers=headers,
         )
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error: {str(e)}", exc_info=True)
+        return func.HttpResponse(
+            json.dumps({"error": "Invalid JSON in request", "details": str(e)}),
+            status_code=400,
+            headers=headers,
+        )
     except Exception as e:
-        logging.error(f"Unexpected error processing request: {str(e)}", exc_info=True)
+        logging.error(f"Unexpected error: {str(e)}", exc_info=True)
         return func.HttpResponse(
             json.dumps(
                 {
                     "error": "Internal server error",
-                    "debug": {"details": str(e), "type": "UnexpectedError"},
+                    "details": str(e),
+                    "type": "UnexpectedError",
                 }
             ),
             status_code=500,
