@@ -3,7 +3,11 @@ import logging
 import os
 import azure.functions as func
 from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.identity import (
+    DefaultAzureCredential,
+    AzureCliCredential,
+    ManagedIdentityCredential,
+)
 from azure.core.credentials import AzureKeyCredential
 
 
@@ -48,7 +52,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
             # Limpiar el agent_id si tiene comillas extras
             if agent_id:
-                agent_id = agent_id.strip('"').strip()
+                agent_id = agent_id.strip('"')
 
             # Validar variables requeridas
             if not all([endpoint, agent_id]):
@@ -72,17 +76,24 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 logging.info(f"Using agent ID: {agent_id}")
 
                 # Extraer información del endpoint
+                # De: https://ia-analytics.services.ai.azure.com/api/projects/PoC
+                # Extraer: resource_group y project_name
+
+                # Parsear el endpoint para obtener el project_name
                 project_name = (
                     endpoint.split("/projects/")[-1]
                     if "/projects/" in endpoint
                     else "PoC"
                 )
 
-                # Extraer resource group del resource ID si está disponible
+                # El resource group lo necesitamos de alguna forma
+                # Podríamos extraerlo del AZURE_EXISTING_AIPROJECT_RESOURCE_ID si está disponible
                 resource_id = os.environ.get("AZURE_EXISTING_AIPROJECT_RESOURCE_ID", "")
-                resource_group = os.environ.get("AZURE_RESOURCE_GROUP", "IA-Analytics")
+                resource_group = "IA-Analytics"  # Default basado en tu configuración
 
-                if resource_id and not os.environ.get("AZURE_RESOURCE_GROUP"):
+                if resource_id:
+                    # Extraer resource group del resource ID
+                    # /subscriptions/.../resourceGroups/IA-Analytics/...
                     parts = resource_id.split("/")
                     if "resourceGroups" in parts:
                         rg_index = parts.index("resourceGroups")
@@ -93,54 +104,46 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 logging.info(f"Using resource_group: {resource_group}")
                 logging.info(f"Using subscription_id: {subscription_id}")
 
-                # Crear el cliente
+                # Intentar diferentes métodos de autenticación
                 project_client = None
 
-                # Intentar con API Key primero
+                # Método 1: Intentar con API Key si está disponible
                 if api_key:
                     try:
                         logging.info("Attempting authentication with API Key")
                         credential = AzureKeyCredential(api_key)
-
-                        # Primero intentar solo con credential y endpoint
+                        project_client = AIProjectClient(
+                            credential=credential,
+                            endpoint=endpoint,
+                            # Los siguientes parámetros podrían no ser necesarios con AzureKeyCredential
+                            # pero los incluimos por si acaso
+                            subscription_id=subscription_id,
+                            resource_group_name=resource_group,
+                            project_name=project_name,
+                        )
+                        logging.info("Successfully authenticated with API Key")
+                    except TypeError as te:
+                        # Si falla con TypeError, intentar sin los parámetros extra
+                        logging.warning(f"Failed with extra params: {te}")
                         try:
                             project_client = AIProjectClient(
                                 credential=credential, endpoint=endpoint
                             )
                             logging.info(
-                                "Successfully created client with API Key (minimal params)"
+                                "Successfully authenticated with API Key (minimal params)"
                             )
-                        except Exception as e1:
-                            logging.warning(f"Minimal params failed: {e1}")
-                            # Si falla, intentar con todos los parámetros
-                            project_client = AIProjectClient(
-                                credential=credential,
-                                endpoint=endpoint,
-                                subscription_id=subscription_id,
-                                resource_group_name=resource_group,
-                                project_name=project_name,
-                            )
-                            logging.info(
-                                "Successfully created client with API Key (full params)"
-                            )
-                    except Exception as e:
-                        logging.error(f"API Key authentication failed: {e}")
-                        project_client = None
+                        except Exception as e2:
+                            logging.error(f"API Key authentication failed: {e2}")
+                            project_client = None
 
-                # Si API Key falla, intentar con DefaultAzureCredential
-                if not project_client:
+                # Método 2: Si API Key falla, intentar con DefaultAzureCredential
+                if not project_client and subscription_id:
                     try:
                         logging.info(
                             "Attempting authentication with DefaultAzureCredential"
                         )
-
-                        # En Azure Functions, usar ManagedIdentityCredential
-                        try:
-                            credential = ManagedIdentityCredential()
-                            logging.info("Using ManagedIdentityCredential")
-                        except:
-                            credential = DefaultAzureCredential()
-                            logging.info("Using DefaultAzureCredential")
+                        # Usar ManagedIdentityCredential en Azure Functions
+                        credential = ManagedIdentityCredential()
 
                         project_client = AIProjectClient(
                             credential=credential,
@@ -149,154 +152,63 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                             resource_group_name=resource_group,
                             project_name=project_name,
                         )
-                        logging.info("Successfully authenticated with Azure Identity")
+                        logging.info("Successfully authenticated with Managed Identity")
                     except Exception as e:
-                        logging.error(f"Azure Identity authentication failed: {e}")
-                        return func.HttpResponse(
-                            json.dumps(
-                                {"error": "Authentication failed", "details": str(e)}
-                            ),
-                            status_code=500,
-                            headers=headers,
-                        )
-
-                logging.info("AIProjectClient created successfully")
-
-                # IMPORTANTE: La estructura correcta del SDK es:
-                # project_client.agents.create_thread() NO project_client.agents.threads.create()
-
-                try:
-                    # Opción 1: Usar el método correcto según la versión del SDK
-                    if hasattr(project_client.agents, "create_thread"):
-                        # Versión más nueva del SDK
-                        thread = project_client.agents.create_thread()
-                        logging.info(f"Created thread with create_thread: {thread.id}")
-                    elif hasattr(project_client.agents, "threads"):
-                        # Versión anterior del SDK
-                        thread = project_client.agents.threads.create()
-                        logging.info(f"Created thread with threads.create: {thread.id}")
-                    else:
-                        # Intentar acceso directo
-                        # Algunos SDKs usan AgentsClient directamente
-                        from azure.ai.projects.models import ThreadCreationOptions
-
-                        thread = project_client.agents.create_thread(
-                            ThreadCreationOptions()
-                        )
-                        logging.info(f"Created thread with direct method: {thread.id}")
-
-                except AttributeError as ae:
-                    logging.error(f"Thread creation failed with AttributeError: {ae}")
-                    # Intentar método alternativo
-                    try:
-                        # Algunos SDKs requieren inicialización diferente
-                        from azure.ai.projects.operations import AgentsOperations
-
-                        agents_ops = project_client.agents
-
-                        # Verificar qué métodos están disponibles
-                        available_methods = dir(agents_ops)
-                        logging.info(
-                            f"Available methods in agents: {[m for m in available_methods if not m.startswith('_')]}"
-                        )
-
-                        # Intentar crear thread con el método disponible
-                        if "create_thread" in available_methods:
-                            thread = agents_ops.create_thread()
-                        else:
-                            raise Exception(
-                                f"No thread creation method found. Available: {available_methods}"
+                        logging.error(f"Managed Identity authentication failed: {e}")
+                        # Intentar con DefaultAzureCredential como último recurso
+                        try:
+                            credential = DefaultAzureCredential()
+                            project_client = AIProjectClient(
+                                credential=credential,
+                                endpoint=endpoint,
+                                subscription_id=subscription_id,
+                                resource_group_name=resource_group,
+                                project_name=project_name,
                             )
+                            logging.info(
+                                "Successfully authenticated with DefaultAzureCredential"
+                            )
+                        except Exception as e2:
+                            logging.error(f"DefaultAzureCredential failed: {e2}")
+                            project_client = None
 
-                    except Exception as e2:
-                        logging.error(f"Alternative thread creation failed: {e2}")
-                        return func.HttpResponse(
-                            json.dumps(
-                                {
-                                    "error": "SDK method error",
-                                    "details": "Unable to create thread - SDK version incompatibility",
-                                    "suggestion": "Check azure-ai-projects version in requirements.txt",
-                                }
-                            ),
-                            status_code=500,
-                            headers=headers,
-                        )
-
-                # Crear mensaje en el thread
-                try:
-                    if hasattr(project_client.agents, "create_message"):
-                        message = project_client.agents.create_message(
-                            thread_id=thread.id, role="user", content=user_message
-                        )
-                    elif hasattr(project_client.agents, "messages"):
-                        message = project_client.agents.messages.create(
-                            thread_id=thread.id, role="user", content=user_message
-                        )
-                    else:
-                        # Método directo
-                        from azure.ai.projects.models import MessageCreationOptions
-
-                        message = project_client.agents.create_message(
-                            thread_id=thread.id,
-                            message=MessageCreationOptions(
-                                role="user", content=user_message
-                            ),
-                        )
-
-                    logging.info(f"Created message: {message.id}")
-
-                except Exception as e:
-                    logging.error(f"Message creation failed: {e}")
+                if not project_client:
                     return func.HttpResponse(
                         json.dumps(
-                            {"error": "Failed to create message", "details": str(e)}
+                            {
+                                "error": "Failed to initialize AI Project Client",
+                                "details": "Could not authenticate with any available method",
+                                "suggestion": "Check your API key and endpoint configuration",
+                            }
                         ),
                         status_code=500,
                         headers=headers,
                     )
 
-                # Ejecutar el agente
-                try:
-                    if hasattr(project_client.agents, "create_and_run"):
-                        run = project_client.agents.create_and_run(
-                            thread_id=thread.id, assistant_id=agent_id
-                        )
-                    elif hasattr(project_client.agents, "runs"):
-                        run = project_client.agents.runs.create_and_process(
-                            thread_id=thread.id, assistant_id=agent_id
-                        )
-                    else:
-                        # Método directo
-                        from azure.ai.projects.models import RunCreationOptions
+                logging.info("AIProjectClient created successfully")
 
-                        run = project_client.agents.create_run(
-                            thread_id=thread.id,
-                            run=RunCreationOptions(assistant_id=agent_id),
-                        )
-                        # Esperar a que complete
-                        import time
+                # Crear un nuevo thread
+                thread = project_client.agents.threads.create()
+                logging.info(f"Created thread with ID: {thread.id}")
 
-                        max_attempts = 30
-                        for _ in range(max_attempts):
-                            run = project_client.agents.get_run(
-                                thread_id=thread.id, run_id=run.id
-                            )
-                            if run.status in ["completed", "failed", "cancelled"]:
-                                break
-                            time.sleep(1)
+                # Crear mensaje en el thread
+                message = project_client.agents.messages.create(
+                    thread_id=thread.id, role="user", content=user_message
+                )
+                logging.info(f"Created message with ID: {message.id}")
 
-                    logging.info(f"Run status: {run.status}")
+                # Ejecutar el agente y esperar respuesta
+                run = project_client.agents.runs.create_and_process(
+                    thread_id=thread.id,
+                    assistant_id=agent_id,  # Usar assistant_id, no agent_id
+                )
 
-                except Exception as e:
-                    logging.error(f"Run creation failed: {e}")
-                    return func.HttpResponse(
-                        json.dumps({"error": "Failed to run agent", "details": str(e)}),
-                        status_code=500,
-                        headers=headers,
-                    )
+                logging.info(f"Run completed with status: {run.status}")
 
                 if run.status == "failed":
                     error_details = getattr(run, "last_error", None)
+                    if error_details:
+                        logging.error(f"Run failed with error: {error_details}")
                     return func.HttpResponse(
                         json.dumps(
                             {
@@ -312,68 +224,41 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                         headers=headers,
                     )
 
-                # Obtener mensajes
-                try:
-                    if hasattr(project_client.agents, "list_messages"):
-                        messages = project_client.agents.list_messages(
-                            thread_id=thread.id
-                        )
-                    elif hasattr(project_client.agents, "messages"):
-                        messages = project_client.agents.messages.list(
-                            thread_id=thread.id
-                        )
-                    else:
-                        messages = project_client.agents.get_messages(
-                            thread_id=thread.id
-                        )
+                # Obtener los mensajes del thread
+                messages = project_client.agents.messages.list(thread_id=thread.id)
 
-                    assistant_response = ""
-                    for msg in messages:
-                        if msg.role == "assistant":
-                            # Intentar diferentes formas de obtener el contenido
-                            if hasattr(msg, "content"):
-                                if (
-                                    isinstance(msg.content, list)
-                                    and len(msg.content) > 0
-                                ):
-                                    content_item = msg.content[0]
-                                    if hasattr(content_item, "text"):
-                                        if hasattr(content_item.text, "value"):
-                                            assistant_response = content_item.text.value
-                                        else:
-                                            assistant_response = str(content_item.text)
-                                    elif isinstance(content_item, str):
-                                        assistant_response = content_item
-                                elif isinstance(msg.content, str):
-                                    assistant_response = msg.content
-                            elif hasattr(msg, "text_messages") and msg.text_messages:
+                # Buscar la respuesta del asistente
+                assistant_response = ""
+                for msg in messages:
+                    if msg.role == "assistant":
+                        # Intentar diferentes formas de obtener el contenido
+                        if hasattr(msg, "content") and msg.content:
+                            if isinstance(msg.content, list) and len(msg.content) > 0:
+                                content_item = msg.content[0]
+                                if hasattr(content_item, "text"):
+                                    if hasattr(content_item.text, "value"):
+                                        assistant_response = content_item.text.value
+                                    else:
+                                        assistant_response = str(content_item.text)
+                                    break
+                            elif isinstance(msg.content, str):
+                                assistant_response = msg.content
+                                break
+                        elif hasattr(msg, "text_messages") and msg.text_messages:
+                            if len(msg.text_messages) > 0:
                                 assistant_response = msg.text_messages[-1].text.value
-
-                            if assistant_response:
                                 break
 
-                    if not assistant_response:
-                        assistant_response = "Lo siento, no pude generar una respuesta. Por favor, intenta de nuevo."
+                if not assistant_response:
+                    assistant_response = "Lo siento, no pude generar una respuesta. Por favor, intenta de nuevo."
 
-                    logging.info(
-                        f"Assistant response received: {len(assistant_response)} chars"
-                    )
+                logging.info(f"Assistant response: {assistant_response[:100]}...")
 
-                    return func.HttpResponse(
-                        json.dumps({"response": assistant_response}),
-                        status_code=200,
-                        headers=headers,
-                    )
-
-                except Exception as e:
-                    logging.error(f"Failed to get messages: {e}")
-                    return func.HttpResponse(
-                        json.dumps(
-                            {"error": "Failed to retrieve response", "details": str(e)}
-                        ),
-                        status_code=500,
-                        headers=headers,
-                    )
+                return func.HttpResponse(
+                    json.dumps({"response": assistant_response}),
+                    status_code=200,
+                    headers=headers,
+                )
 
             except Exception as e:
                 logging.error(f"Azure AI error: {str(e)}")
