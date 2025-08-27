@@ -1,6 +1,0 @@
-azure-functions>=1.18.0
-azure-ai-projects==1.0.0b9
-azure-identity>=1.15.0
-azure-core>=1.29.0
-typing-extensions>=4.0.0
-requests>=2.31.0
