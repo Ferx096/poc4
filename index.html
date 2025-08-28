@@ -214,6 +214,30 @@
             cursor: not-allowed;
         }
 
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            font-size: 12px;
+            z-index: 1001;
+        }
+
+        .status-online {
+            background: #28a745;
+        }
+
+        .status-offline {
+            background: #dc3545;
+        }
+
+        .status-connecting {
+            background: #ffc107;
+            color: #333;
+        }
+
         /* Main content styles */
         .header {
             background: var(--white);
@@ -311,6 +335,11 @@
 </head>
 
 <body>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status status-online">
+        🟢 Sistema en línea
+    </div>
+
     <!-- Header -->
     <header class="header">
         <nav class="nav-container">
@@ -325,7 +354,7 @@
     <main class="main-content">
         <h1 class="hero-title">Tu Futuro, Nuestra Prioridad</h1>
         <p class="hero-subtitle">
-            Descubre cómo AFP Prima puede ayudarte en cualquier duda.
+            Descubre cómo AFP Prima puede ayudarte en cualquier duda sobre tu fondo de pensiones.
         </p>
         <button class="cta-button" onclick="toggleChat()">💬 Habla con nuestro Asistente AI</button>
     </main>
@@ -342,15 +371,22 @@
         <div class="chat-window" id="chatWindow">
             <div class="chat-header">
                 <div>
-                    <h3>🤖 Agente KE Prima AFP</h3>
-                    <div>En línea • Respuesta inmediata</div>
+                    <h3>🤖 Asistente AFP Prima</h3>
+                    <div>Especialista en fondos de pensiones</div>
                 </div>
                 <button class="close-btn" onclick="toggleChat()">×</button>
             </div>
 
             <div class="chat-messages" id="chatMessages">
                 <div class="message bot">
-                    ¡Hola! Soy tu asistente de AFP Prima. ¿En qué puedo ayudarte?
+                    ¡Hola! Soy tu asistente especializado en AFP Prima. Puedo ayudarte con consultas sobre:
+                    <br><br>
+                    • Tu fondo de pensiones<br>
+                    • Aportes y rentabilidad<br>
+                    • Trámites y beneficios<br>
+                    • Preguntas generales sobre AFP
+                    <br><br>
+                    ¿En qué puedo ayudarte hoy?
                 </div>
             </div>
 
@@ -363,7 +399,7 @@
             </div>
 
             <div class="chat-input-container">
-                <input type="text" id="chatInput" class="chat-input" placeholder="Escribe tu mensaje..."
+                <input type="text" id="chatInput" class="chat-input" placeholder="Pregúntame sobre tu AFP..."
                     onkeypress="handleKeyPress(event)">
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -376,7 +412,9 @@
 
     <script>
         let chatOpen = false;
-        const API_ENDPOINT = 'https://proud-moss-0e645580f.2.azurestaticapps.net/api/chat';
+
+        // CONFIGURACIÓN - Actualiza esta URL con tu Azure Function
+        const API_ENDPOINT = 'functions-agent-ke-chemcrahfwdrena6.eastus2-01.azurewebsites.net';
 
         function toggleChat() {
             const chatWindow = document.getElementById('chatWindow');
@@ -384,18 +422,36 @@
 
             if (chatOpen) {
                 chatWindow.classList.add('show');
+                document.getElementById('chatInput').focus();
             } else {
                 chatWindow.classList.remove('show');
             }
         }
 
         function handleKeyPress(event) {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
                 sendMessage();
             }
         }
 
-        // FUNCIÓN ACTUALIZADA CON MEJOR DEBUGGING
+        function updateConnectionStatus(status) {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.className = `connection-status status-${status}`;
+
+            switch (status) {
+                case 'online':
+                    statusElement.textContent = '🟢 Sistema en línea';
+                    break;
+                case 'connecting':
+                    statusElement.textContent = '🟡 Conectando...';
+                    break;
+                case 'offline':
+                    statusElement.textContent = '🔴 Sistema sin conexión';
+                    break;
+            }
+        }
+
         async function sendMessage() {
             const chatInput = document.getElementById('chatInput');
             const sendBtn = document.getElementById('sendBtn');
@@ -408,6 +464,7 @@
             // Disable input
             chatInput.disabled = true;
             sendBtn.disabled = true;
+            updateConnectionStatus('connecting');
 
             // Add user message
             const userMessage = document.createElement('div');
@@ -423,8 +480,7 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
-                console.log('Sending request to:', API_ENDPOINT);
-                console.log('Message:', message);
+                console.log('Enviando mensaje a:', API_ENDPOINT);
 
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
@@ -435,57 +491,45 @@
                     body: JSON.stringify({ message: message }),
                 });
 
-                console.log('Response status:', response.status);
-                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                console.log('Estado de respuesta:', response.status);
 
-                const contentType = response.headers.get('content-type');
-                let data;
-
-                if (contentType && contentType.includes('application/json')) {
-                    data = await response.json();
-                } else {
-                    const textResponse = await response.text();
-                    console.error('Non-JSON response:', textResponse);
-                    throw new Error('Server returned non-JSON response');
-                }
-
-                console.log('Response data:', data);
-                if (!response.ok) {
-                    console.log('Full error response:', data);
-                    alert('Error details: ' + JSON.stringify(data, null, 2));
-                }
                 // Hide typing indicator
                 typingIndicator.style.display = 'none';
 
                 if (response.ok) {
+                    const data = await response.json();
+                    console.log('Respuesta recibida:', data);
+
                     // Add bot response
                     const botMessage = document.createElement('div');
                     botMessage.className = 'message bot';
-                    botMessage.textContent = data.response;
+                    botMessage.innerHTML = data.response.replace(/\n/g, '<br>');
                     chatMessages.appendChild(botMessage);
+
+                    updateConnectionStatus('online');
                 } else {
-                    // Add error message with details
+                    const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+                    console.error('Error del servidor:', errorData);
+
                     const errorMessage = document.createElement('div');
                     errorMessage.className = 'message bot';
-                    errorMessage.textContent = `Error (${response.status}): ${data.error || 'Error desconocido'}`;
-                    if (data.details) {
-                        console.error('Error details:', data.details);
-                    }
+                    errorMessage.textContent = `Lo siento, ocurrió un error: ${errorData.error || 'Error del servidor'}`;
                     chatMessages.appendChild(errorMessage);
+
+                    updateConnectionStatus('offline');
                 }
             } catch (error) {
-                console.error('Fetch error:', error);
+                console.error('Error de conexión:', error);
                 typingIndicator.style.display = 'none';
+                updateConnectionStatus('offline');
 
                 const errorMessage = document.createElement('div');
                 errorMessage.className = 'message bot';
 
                 if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    errorMessage.textContent = 'Error de red: No se pudo conectar al servidor. Verifica que el endpoint esté correcto.';
-                } else if (error.message.includes('JSON')) {
-                    errorMessage.textContent = 'Error: El servidor devolvió una respuesta inválida.';
+                    errorMessage.textContent = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e intenta nuevamente.';
                 } else {
-                    errorMessage.textContent = `Error inesperado: ${error.message}`;
+                    errorMessage.textContent = `Error de conexión: ${error.message}`;
                 }
 
                 chatMessages.appendChild(errorMessage);
@@ -497,6 +541,20 @@
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
         }
+
+        // Test connection on load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(API_ENDPOINT, { method: 'OPTIONS' });
+                if (response.ok) {
+                    updateConnectionStatus('online');
+                } else {
+                    updateConnectionStatus('offline');
+                }
+            } catch (error) {
+                updateConnectionStatus('offline');
+            }
+        });
 
         // Close chat when clicking outside
         document.addEventListener('click', function (event) {
