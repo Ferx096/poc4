@@ -5,6 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AFP Prima - Tu Futuro, Nuestra Prioridad</title>
+    <meta name="description"
+        content="Asistente AI especializado en AFP Prima. Consulta sobre tu fondo de pensiones, aportes, rentabilidad y trámites.">
+    <meta name="keywords" content="AFP Prima, fondo de pensiones, AFP, jubilación, aportes, rentabilidad">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="AFP Prima - Asistente AI">
+    <meta property="og:description" content="Tu asistente personal para consultas sobre fondos de pensiones AFP Prima">
+    <meta property="og:type" content="website">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA4SDE4VjEwSDE2VjI0SDE0VjEwSDEwVjhaTTIwIDEwVjEySDIyVjI0SDI0VjEySDE4VjEwSDIwWiIgZmlsbD0id2hpdGUiLz4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQwIiB4MT0iMCIgeTE9IjAiIHgyPSIzMiIgeTI9IjMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiNGRjQ1MDAiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkY2QTAwIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+">
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -15,6 +28,9 @@
             --text-dark: #333333;
             --light-orange: #FFF4F0;
             --shadow: 0 4px 20px rgba(255, 69, 0, 0.1);
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
         }
 
         * {
@@ -29,6 +45,34 @@
             color: var(--text-dark);
             background: linear-gradient(135deg, var(--light-orange) 0%, var(--white) 100%);
             min-height: 100vh;
+        }
+
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1001;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-online {
+            background: var(--success);
+        }
+
+        .status-offline {
+            background: var(--danger);
+        }
+
+        .status-connecting {
+            background: var(--warning);
+            color: #333;
         }
 
         /* Chat Styles */
@@ -51,16 +95,49 @@
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
+            position: relative;
         }
 
         .chat-button:hover {
             transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(255, 69, 0, 0.4);
         }
 
         .chat-button svg {
             width: 34px;
             height: 34px;
             fill: white;
+        }
+
+        /* Notification badge */
+        .chat-button::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            background: #ff0000;
+            border-radius: 50%;
+            border: 2px solid white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .chat-window {
@@ -75,10 +152,23 @@
             display: none;
             flex-direction: column;
             overflow: hidden;
+            animation: slideUp 0.3s ease-out;
         }
 
         .chat-window.show {
             display: flex;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .chat-header {
@@ -90,6 +180,16 @@
             align-items: center;
         }
 
+        .chat-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .chat-header div:first-child div {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
         .close-btn {
             background: rgba(255, 255, 255, 0.1);
             border: none;
@@ -98,6 +198,11 @@
             cursor: pointer;
             padding: 8px;
             border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .chat-messages {
@@ -107,48 +212,87 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
         }
 
         .message {
-            max-width: 80%;
+            max-width: 85%;
             padding: 12px 16px;
             border-radius: 18px;
             word-wrap: break-word;
+            line-height: 1.4;
+            animation: messageSlide 0.2s ease-out;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message.user {
-            background: var(--primary-orange);
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
         }
 
         .message.bot {
-            background: #f0f0f0;
+            background: #f8f9fa;
             color: var(--text-dark);
             align-self: flex-start;
             border-bottom-left-radius: 4px;
+            border-left: 4px solid var(--primary-orange);
         }
 
         .typing-indicator {
             display: none;
             align-self: flex-start;
             padding: 12px 16px;
-            background: #f0f0f0;
+            background: #f8f9fa;
             border-radius: 18px;
             border-bottom-left-radius: 4px;
+            border-left: 4px solid var(--primary-orange);
         }
 
         .typing-dots {
             display: inline-flex;
             gap: 4px;
+            align-items: center;
+        }
+
+        .typing-dots::before {
+            content: "Escribiendo";
+            margin-right: 8px;
+            font-size: 12px;
+            color: #666;
         }
 
         .typing-dots span {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #999;
+            background: var(--primary-orange);
             animation: typing 1.4s infinite ease-in-out;
         }
 
@@ -170,7 +314,7 @@
             }
 
             40% {
-                transform: scale(1);
+                transform: scale(1.2);
                 opacity: 1;
             }
         }
@@ -180,6 +324,7 @@
             border-top: 1px solid #eee;
             display: flex;
             gap: 10px;
+            align-items: flex-end;
         }
 
         .chat-input {
@@ -189,6 +334,14 @@
             border-radius: 25px;
             outline: none;
             font-size: 14px;
+            resize: none;
+            min-height: 40px;
+            max-height: 100px;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary-orange);
         }
 
         .send-btn {
@@ -202,11 +355,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.3s;
+            transition: all 0.2s;
+            flex-shrink: 0;
         }
 
-        .send-btn:hover {
+        .send-btn:hover:not(:disabled) {
             background: var(--secondary-orange);
+            transform: scale(1.05);
         }
 
         .send-btn:disabled {
@@ -214,35 +369,12 @@
             cursor: not-allowed;
         }
 
-        .connection-status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            color: white;
-            font-size: 12px;
-            z-index: 1001;
-        }
-
-        .status-online {
-            background: #28a745;
-        }
-
-        .status-offline {
-            background: #dc3545;
-        }
-
-        .status-connecting {
-            background: #ffc107;
-            color: #333;
-        }
-
         /* Main content styles */
         .header {
             background: var(--white);
             padding: 1rem 0;
             box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
         }
 
         .nav-container {
@@ -291,6 +423,7 @@
             font-weight: 700;
             color: var(--primary-orange);
             margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(255, 69, 0, 0.1);
         }
 
         .hero-subtitle {
@@ -300,6 +433,7 @@
             max-width: 600px;
             margin-left: auto;
             margin-right: auto;
+            opacity: 0.8;
         }
 
         .cta-button {
@@ -312,23 +446,80 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 69, 0, 0.3);
         }
 
         .cta-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 69, 0, 0.3);
+            box-shadow: 0 8px 25px rgba(255, 69, 0, 0.4);
         }
 
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 4rem;
+            padding: 0 1rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Responsive */
         @media (max-width: 768px) {
             .chat-window {
-                width: 90vw;
+                width: calc(100vw - 20px);
                 height: 70vh;
-                right: 5vw;
+                right: 10px;
                 bottom: 100px;
+                left: 10px;
             }
 
             .hero-title {
                 font-size: 2rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .main-content {
+                padding: 2rem 1rem;
+            }
+
+            .connection-status {
+                top: 10px;
+                right: 10px;
+                font-size: 10px;
+                padding: 6px 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-button {
+                width: 60px;
+                height: 60px;
+                bottom: 20px;
+                right: 20px;
+            }
+
+            .chat-button svg {
+                width: 28px;
+                height: 28px;
             }
         }
     </style>
@@ -336,8 +527,8 @@
 
 <body>
     <!-- Connection Status -->
-    <div id="connectionStatus" class="connection-status status-online">
-        🟢 Sistema en línea
+    <div id="connectionStatus" class="connection-status status-connecting">
+        🟡 Conectando...
     </div>
 
     <!-- Header -->
@@ -354,14 +545,33 @@
     <main class="main-content">
         <h1 class="hero-title">Tu Futuro, Nuestra Prioridad</h1>
         <p class="hero-subtitle">
-            Descubre cómo AFP Prima puede ayudarte en cualquier duda sobre tu fondo de pensiones.
+            Descubre cómo AFP Prima puede ayudarte con consultas sobre tu fondo de pensiones, aportes, rentabilidad y
+            trámites administrativos.
         </p>
-        <button class="cta-button" onclick="toggleChat()">💬 Habla con nuestro Asistente AI</button>
+        <button class="cta-button" onclick="toggleChat()">💬 Habla con nuestro Asistente IA</button>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">💰</div>
+                <h3>Consulta tu Saldo</h3>
+                <p>Información actualizada sobre tu fondo de pensiones y aportes</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📈</div>
+                <h3>Rentabilidad</h3>
+                <p>Conoce el rendimiento de tu fondo y las opciones disponibles</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📋</div>
+                <h3>Trámites</h3>
+                <p>Orientación sobre traspasos, retiros y procedimientos</p>
+            </div>
+        </div>
     </main>
 
     <!-- Chatbot -->
     <div class="chat-bubble">
-        <button class="chat-button" onclick="toggleChat()">
+        <button class="chat-button" onclick="toggleChat()" title="Habla con nuestro asistente IA">
             <svg viewBox="0 0 24 24">
                 <path
                     d="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9V7H18V9H6M14,11V13H6V11H14M18,15H6V17H18V15Z" />
@@ -374,19 +584,20 @@
                     <h3>🤖 Asistente AFP Prima</h3>
                     <div>Especialista en fondos de pensiones</div>
                 </div>
-                <button class="close-btn" onclick="toggleChat()">×</button>
+                <button class="close-btn" onclick="toggleChat()" title="Cerrar chat">×</button>
             </div>
 
             <div class="chat-messages" id="chatMessages">
                 <div class="message bot">
-                    ¡Hola! Soy tu asistente especializado en AFP Prima. Puedo ayudarte con consultas sobre:
+                    ¡Hola! 👋 Soy tu asistente especializado de AFP Prima.
                     <br><br>
-                    • Tu fondo de pensiones<br>
-                    • Aportes y rentabilidad<br>
-                    • Trámites y beneficios<br>
-                    • Preguntas generales sobre AFP
-                    <br><br>
-                    ¿En qué puedo ayudarte hoy?
+                    Puedo ayudarte con:<br>
+                    • 💰 Consultas sobre tu fondo de pensiones<br>
+                    • 📊 Información de aportes y rentabilidad<br>
+                    • 📄 Trámites y procedimientos<br>
+                    • ❓ Preguntas generales sobre AFP<br>
+                    <br>
+                    ¿En qué puedo asistirte hoy?
                 </div>
             </div>
 
@@ -399,9 +610,9 @@
             </div>
 
             <div class="chat-input-container">
-                <input type="text" id="chatInput" class="chat-input" placeholder="Pregúntame sobre tu AFP..."
-                    onkeypress="handleKeyPress(event)">
-                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                <input type="text" id="chatInput" class="chat-input" placeholder="Escribe tu consulta sobre AFP..."
+                    onkeypress="handleKeyPress(event)" maxlength="500">
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Enviar mensaje">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" />
                     </svg>
@@ -412,17 +623,39 @@
 
     <script>
         let chatOpen = false;
+        let messageCount = 0;
 
-        // CONFIGURACIÓN - Actualiza esta URL con tu Azure Function
-        const API_ENDPOINT = 'https://functions-agent-ke-chemcrahfwdrena6.eastus2-01.azurewebsites.net/api/chat';
+        // 🔧 CONFIGURACIÓN - Cambia esta URL por tu Azure Function
+        const API_ENDPOINT = 'https://afp-prima-backend.azurewebsites.net/api/chat';
+
+        // Estado de conexión
+        let isConnected = false;
+
+        function updateConnectionStatus(status, message = '') {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.className = `connection-status status-${status}`;
+
+            const messages = {
+                'online': '🟢 Sistema en línea',
+                'connecting': '🟡 Conectando...',
+                'offline': '🔴 Sistema sin conexión'
+            };
+
+            statusElement.textContent = message || messages[status];
+            isConnected = status === 'online';
+        }
 
         function toggleChat() {
             const chatWindow = document.getElementById('chatWindow');
+            const chatButton = document.querySelector('.chat-button');
+
             chatOpen = !chatOpen;
 
             if (chatOpen) {
                 chatWindow.classList.add('show');
                 document.getElementById('chatInput').focus();
+                // Remover badge de notificación
+                chatButton.style.setProperty('--notification', 'none');
             } else {
                 chatWindow.classList.remove('show');
             }
@@ -435,134 +668,250 @@
             }
         }
 
-        function updateConnectionStatus(status) {
-            const statusElement = document.getElementById('connectionStatus');
-            statusElement.className = `connection-status status-${status}`;
+        function addMessage(content, isUser = false, isError = false) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
 
-            switch (status) {
-                case 'online':
-                    statusElement.textContent = '🟢 Sistema en línea';
-                    break;
-                case 'connecting':
-                    statusElement.textContent = '🟡 Conectando...';
-                    break;
-                case 'offline':
-                    statusElement.textContent = '🔴 Sistema sin conexión';
-                    break;
+            if (isError) {
+                messageDiv.style.background = '#fee';
+                messageDiv.style.borderLeft = '4px solid #dc3545';
+                content = `⚠️ ${content}`;
             }
+
+            // Convertir URLs en enlaces
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            content = content.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+
+            // Convertir saltos de línea
+            messageDiv.innerHTML = content.replace(/\n/g, '<br>');
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Incrementar contador de mensajes
+            messageCount++;
         }
 
         async function sendMessage() {
             const chatInput = document.getElementById('chatInput');
             const sendBtn = document.getElementById('sendBtn');
-            const chatMessages = document.getElementById('chatMessages');
             const typingIndicator = document.getElementById('typingIndicator');
 
             const message = chatInput.value.trim();
             if (!message) return;
 
-            // Disable input
+            // Verificar si hay conexión
+            if (!isConnected) {
+                addMessage('Por favor, espera a que se establezca la conexión con el servidor.', false, true);
+                return;
+            }
+
+            // Validar longitud del mensaje
+            if (message.length > 500) {
+                addMessage('El mensaje es demasiado largo. Por favor, usa máximo 500 caracteres.', false, true);
+                return;
+            }
+
+            // Deshabilitar controles
             chatInput.disabled = true;
             sendBtn.disabled = true;
-            updateConnectionStatus('connecting');
+            updateConnectionStatus('connecting', '🟡 Procesando...');
 
-            // Add user message
-            const userMessage = document.createElement('div');
-            userMessage.className = 'message user';
-            userMessage.textContent = message;
-            chatMessages.appendChild(userMessage);
+            // Agregar mensaje del usuario
+            addMessage(message, true);
 
-            // Clear input
+            // Limpiar input
             chatInput.value = '';
 
-            // Show typing indicator
+            // Mostrar indicador de escritura
             typingIndicator.style.display = 'flex';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
-                console.log('Enviando mensaje a:', API_ENDPOINT);
+                console.log('🚀 Enviando mensaje al backend:', API_ENDPOINT);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
 
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
+                        'User-Agent': 'AFP-Prima-Chat/1.0'
                     },
-                    body: JSON.stringify({ message: message }),
+                    body: JSON.stringify({
+                        message: message,
+                        timestamp: new Date().toISOString(),
+                        session_id: `github_pages_${Date.now()}`
+                    }),
+                    signal: controller.signal
                 });
 
-                console.log('Estado de respuesta:', response.status);
+                clearTimeout(timeoutId);
 
-                // Hide typing indicator
+                console.log('📡 Respuesta recibida:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+
+                // Ocultar indicador de escritura
                 typingIndicator.style.display = 'none';
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('Respuesta recibida:', data);
+                    console.log('✅ Datos procesados:', data);
 
-                    // Add bot response
-                    const botMessage = document.createElement('div');
-                    botMessage.className = 'message bot';
-                    botMessage.innerHTML = data.response.replace(/\n/g, '<br>');
-                    chatMessages.appendChild(botMessage);
-
-                    updateConnectionStatus('online');
+                    if (data.response) {
+                        addMessage(data.response);
+                        updateConnectionStatus('online');
+                    } else {
+                        addMessage('Recibí tu mensaje pero no pude generar una respuesta. Inténtalo de nuevo.', false, true);
+                    }
                 } else {
-                    const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
-                    console.error('Error del servidor:', errorData);
+                    // Manejar errores HTTP
+                    let errorMessage = 'Error del servidor';
 
-                    const errorMessage = document.createElement('div');
-                    errorMessage.className = 'message bot';
-                    errorMessage.textContent = `Lo siento, ocurrió un error: ${errorData.error || 'Error del servidor'}`;
-                    chatMessages.appendChild(errorMessage);
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorData.message || `Error ${response.status}`;
 
+                        if (errorData.details) {
+                            console.error('💥 Detalles del error:', errorData.details);
+                        }
+                    } catch (e) {
+                        console.error('💥 Error parseando respuesta de error:', e);
+                        errorMessage = `Error ${response.status}: ${response.statusText}`;
+                    }
+
+                    addMessage(`${errorMessage}. Por favor, inténtalo nuevamente.`, false, true);
                     updateConnectionStatus('offline');
                 }
+
             } catch (error) {
-                console.error('Error de conexión:', error);
+                console.error('💥 Error de conexión:', error);
                 typingIndicator.style.display = 'none';
                 updateConnectionStatus('offline');
 
-                const errorMessage = document.createElement('div');
-                errorMessage.className = 'message bot';
+                let errorMessage = 'Error de conexión';
 
-                if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    errorMessage.textContent = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e intenta nuevamente.';
+                if (error.name === 'AbortError') {
+                    errorMessage = 'La consulta tardó demasiado tiempo. Inténtalo nuevamente';
+                } else if (error.message.includes('fetch')) {
+                    errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet';
+                } else if (error.message.includes('JSON')) {
+                    errorMessage = 'Error procesando la respuesta del servidor';
                 } else {
-                    errorMessage.textContent = `Error de conexión: ${error.message}`;
+                    errorMessage = `Error inesperado: ${error.message}`;
                 }
 
-                chatMessages.appendChild(errorMessage);
+                addMessage(errorMessage, false, true);
+
             } finally {
-                // Re-enable input
+                // Rehabilitar controles
                 chatInput.disabled = false;
                 sendBtn.disabled = false;
                 chatInput.focus();
-                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
         }
 
-        // Test connection on load
-        window.addEventListener('load', async () => {
+        // Verificar conexión al cargar la página
+        async function checkConnection() {
             try {
-                const response = await fetch(API_ENDPOINT, { method: 'OPTIONS' });
-                if (response.ok) {
+                updateConnectionStatus('connecting');
+
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'OPTIONS',
+                    timeout: 5000
+                });
+
+                if (response.ok || response.status === 204) {
                     updateConnectionStatus('online');
                 } else {
-                    updateConnectionStatus('offline');
+                    updateConnectionStatus('offline', '🔴 Servidor no disponible');
                 }
             } catch (error) {
-                updateConnectionStatus('offline');
+                console.error('❌ Error verificando conexión:', error);
+                updateConnectionStatus('offline', '🔴 Sin conexión');
             }
+        }
+
+        // Reconectar automáticamente cada 30 segundos si está desconectado
+        function autoReconnect() {
+            if (!isConnected) {
+                checkConnection();
+            }
+        }
+
+        // Event Listeners
+        window.addEventListener('load', () => {
+            checkConnection();
+            // Auto-reconexión cada 30 segundos
+            setInterval(autoReconnect, 30000);
         });
 
-        // Close chat when clicking outside
+        // Cerrar chat al hacer clic fuera
         document.addEventListener('click', function (event) {
             const chatBubble = document.querySelector('.chat-bubble');
             if (chatOpen && !chatBubble.contains(event.target)) {
                 toggleChat();
             }
         });
+
+        // Detectar cuando el usuario está inactivo para optimizar recursos
+        let inactivityTimer;
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(() => {
+                if (!chatOpen && !isConnected) {
+                    // Reducir frecuencia de reconexión cuando está inactivo
+                    console.log('🔋 Modo de ahorro de energía activado');
+                }
+            }, 300000); // 5 minutos
+        }
+
+        // Escuchar actividad del usuario
+        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
+            document.addEventListener(event, resetInactivityTimer, true);
+        });
+
+        // Mensaje de bienvenida con delay
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (messageCount === 0) {
+                    // Solo mostrar si no ha interactuado
+                    const chatButton = document.querySelector('.chat-button');
+                    chatButton.style.animation = 'pulse 2s infinite';
+                }
+            }, 5000);
+        });
+
+        // Optimización para móviles
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            // Ajustes específicos para móviles
+            document.documentElement.style.setProperty('--mobile-viewport', window.innerHeight + 'px');
+
+            window.addEventListener('resize', () => {
+                document.documentElement.style.setProperty('--mobile-viewport', window.innerHeight + 'px');
+            });
+        }
+
+        // Analytics básicos (opcional)
+        function trackEvent(eventName, data = {}) {
+            console.log('📊 Event:', eventName, data);
+            // Aquí puedes integrar con Google Analytics, etc.
+        }
+
+        // Trackear eventos importantes
+        window.addEventListener('load', () => trackEvent('page_loaded'));
+
+        // Override del toggleChat para tracking
+        const originalToggleChat = toggleChat;
+        toggleChat = function () {
+            trackEvent('chat_toggled', { isOpen: chatOpen });
+            originalToggleChat();
+        };
     </script>
 </body>
 
