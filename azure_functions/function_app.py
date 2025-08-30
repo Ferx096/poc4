@@ -1,207 +1,70 @@
 import azure.functions as func
 import json
 import logging
+from azure.ai.projects import AIProjectClient
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.agents.models import ListSortOrder
 import os
 from datetime import datetime
-from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential, AzureKeyCredential
-from azure.ai.agents.models import ListSortOrder
 
-# Configurar logging
+# Configurar logging level
 logging.basicConfig(level=logging.INFO)
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-# Constantes
-AGENT_ID = "asst_XizkjMGP4EQaFZYnygjH8BET"
-PROJECT_ENDPOINT = "https://ia-analytics.services.ai.azure.com/"
-PROJECT_NAME = "PoC"
+# Debug: Imprimir todas las variables de entorno (solo para debugging)
+logging.info("=== ENVIRONMENT VARIABLES CHECK ===")
+env_vars = os.environ.keys()
+logging.info(f"Total environment variables: {len(env_vars)}")
+for var in env_vars:
+    if "AZURE" in var or "API" in var:
+        # Solo mostrar primeros 10 caracteres por seguridad
+        value = os.environ.get(var, "")
+        masked_value = f"{value[:10]}..." if len(value) > 10 else value
+        logging.info(f"{var}: {masked_value}")
 
-# Variables globales para el cliente
+# Obtener la API key de las variables de entorno
+API_KEY = os.getenv("AZURE_AI_API_KEY")
+
+# Debug mejorado
+if not API_KEY:
+    logging.error("❌ AZURE_AI_API_KEY NOT FOUND in environment variables")
+    logging.error(
+        "Available env vars with 'AZURE': "
+        + str([k for k in os.environ.keys() if "AZURE" in k])
+    )
+else:
+    logging.info(f"✅ API Key loaded successfully (length: {len(API_KEY)})")
+    logging.info(f"API Key starts with: {API_KEY[:10]}...")
+
+# Inicialización del cliente
 project = None
 initialization_error = None
-api_key_status = "checking"
 
-
-def initialize_client():
-    """Inicializa el cliente de AI con reintentos y mejor manejo de errores"""
-    global project, initialization_error, api_key_status
-
+if API_KEY:
     try:
-        # Opción 1: Intentar con API Key primero
-        api_key = os.environ.get("AZURE_AI_API_KEY")
-
-        if api_key:
-            logging.info(f"✅ API Key encontrada (longitud: {len(api_key)})")
-            api_key_status = "found"
-
-            # Usar AzureKeyCredential para autenticación con API Key
-            project = AIProjectClient(
-                credential=AzureKeyCredential(api_key),
-                endpoint=PROJECT_ENDPOINT,
-                project_name=PROJECT_NAME,
-            )
-
-            # Verificar que el cliente funciona
-            try:
-                agent = project.agents.get_agent(AGENT_ID)
-                logging.info(f"✅ Cliente inicializado y agente verificado: {agent.id}")
-                return True
-            except Exception as e:
-                logging.error(f"❌ Error verificando agente: {str(e)}")
-                initialization_error = (
-                    f"Cliente creado pero no puede acceder al agente: {str(e)}"
-                )
-                project = None
-                return False
-
-        else:
-            # Opción 2: Intentar con Managed Identity si no hay API Key
-            logging.warning(
-                "⚠️ API Key no encontrada, intentando con Managed Identity..."
-            )
-            api_key_status = "not_found"
-
-            # Verificar si Managed Identity está habilitada
-            if os.environ.get("MSI_ENDPOINT"):
-                logging.info(
-                    "MSI_ENDPOINT encontrado, intentando con DefaultAzureCredential..."
-                )
-                project = AIProjectClient(
-                    credential=DefaultAzureCredential(),
-                    endpoint=PROJECT_ENDPOINT,
-                    project_name=PROJECT_NAME,
-                )
-
-                # Verificar conexión
-                agent = project.agents.get_agent(AGENT_ID)
-                logging.info(f"✅ Conectado con Managed Identity: {agent.id}")
-                api_key_status = "managed_identity"
-                return True
-            else:
-                logging.error("❌ Managed Identity no está habilitada")
-                initialization_error = "Ni API Key ni Managed Identity disponibles"
-                return False
-
+        logging.info("Initializing AIProjectClient...")
+        project = AIProjectClient(
+            credential=AzureKeyCredential(API_KEY),
+            endpoint="https://ia-analytics.services.ai.azure.com/",
+            project_name="PoC",
+        )
+        logging.info("✅ AIProjectClient initialized successfully")
     except Exception as e:
         initialization_error = str(e)
-        logging.error(f"❌ Error crítico inicializando cliente: {initialization_error}")
+        logging.error(f"❌ Error initializing AIProjectClient: {initialization_error}")
         project = None
-        return False
+else:
+    initialization_error = "API Key not found in environment"
 
-
-# Intentar inicializar al arrancar
-initialize_client()
-
-
-@app.route(route="health", methods=["GET"])
-def health_check(req: func.HttpRequest) -> func.HttpResponse:
-    """Health check endpoint mejorado"""
-    headers = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
-
-    # Reintentar inicialización si falló
-    if not project:
-        initialize_client()
-
-    # Debug detallado del entorno
-    env_debug = {
-        "total_vars": len(os.environ),
-        "azure_vars": [k for k in os.environ.keys() if "AZURE" in k.upper()][:10],
-        "msi_endpoint": bool(os.environ.get("MSI_ENDPOINT")),
-        "identity_endpoint": bool(os.environ.get("IDENTITY_ENDPOINT")),
-        "functions_extension": os.environ.get(
-            "FUNCTIONS_EXTENSION_VERSION", "not_found"
-        ),
-        "website_instance_id": os.environ.get("WEBSITE_INSTANCE_ID", "not_found")[:10]
-        + "...",
-    }
-
-    health_status = {
-        "status": "checking",
-        "timestamp": datetime.utcnow().isoformat(),
-        "api_key_status": api_key_status,
-        "api_key_configured": bool(os.environ.get("AZURE_AI_API_KEY")),
-        "api_key_length": len(os.environ.get("AZURE_AI_API_KEY", "")),
-        "client_initialized": bool(project),
-        "initialization_error": initialization_error,
-        "agent_id": AGENT_ID,
-        "endpoint": PROJECT_ENDPOINT,
-        "project_name": PROJECT_NAME,
-        "environment": env_debug,
-        "python_version": os.sys.version,
-    }
-
-    # Determinar estado de salud
-    if project:
-        try:
-            # Verificar conexión real
-            agent = project.agents.get_agent(AGENT_ID)
-            health_status["status"] = "healthy"
-            health_status["agent_verified"] = True
-            status_code = 200
-        except Exception as e:
-            health_status["status"] = "unhealthy"
-            health_status["error"] = f"No se puede conectar al agente: {str(e)}"
-            status_code = 503
-    else:
-        health_status["status"] = "unhealthy"
-        health_status["error"] = "Cliente no inicializado"
-
-        # Sugerencias específicas
-        if not os.environ.get("AZURE_AI_API_KEY"):
-            health_status["solution"] = (
-                "Agregar AZURE_AI_API_KEY en Configuración > Configuración de la aplicación (NO en Variables de entorno)"
-            )
-            health_status["steps"] = [
-                "1. Ir a Configuración > Configuración de la aplicación",
-                "2. Click en '+ Nueva configuración de aplicación'",
-                "3. Nombre: AZURE_AI_API_KEY",
-                "4. Valor: [tu API key]",
-                "5. Click en Guardar",
-                "6. Click en el botón de refrescar arriba para aplicar cambios",
-            ]
-        else:
-            health_status["solution"] = (
-                "API Key presente pero no válida o permisos insuficientes"
-            )
-
-        status_code = 503
-
-    return func.HttpResponse(
-        json.dumps(health_status, indent=2), status_code=status_code, headers=headers
-    )
-
-
-@app.route(route="test", methods=["GET"])
-def test_endpoint(req: func.HttpRequest) -> func.HttpResponse:
-    """Test endpoint simplificado"""
-    headers = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
-
-    # Información básica del entorno
-    test_data = {
-        "message": "Function App is running",
-        "timestamp": datetime.utcnow().isoformat(),
-        "api_key_present": bool(os.environ.get("AZURE_AI_API_KEY")),
-        "api_key_length": len(os.environ.get("AZURE_AI_API_KEY", "")),
-        "client_ready": bool(project),
-        "azure_vars_count": len([k for k in os.environ.keys() if "AZURE" in k.upper()]),
-        "config_source": (
-            "Configuración de la aplicación"
-            if os.environ.get("AZURE_AI_API_KEY")
-            else "No configurado"
-        ),
-    }
-
-    return func.HttpResponse(
-        json.dumps(test_data, indent=2), status_code=200, headers=headers
-    )
+AGENT_ID = "asst_XizkjMGP4EQaFZYnygjH8BET"
 
 
 @app.route(route="chat", methods=["POST"])
 def chat_endpoint(req: func.HttpRequest) -> func.HttpResponse:
-    """Endpoint principal del chat"""
     logging.info("=== CHAT ENDPOINT CALLED ===")
 
+    # Headers CORS
     headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -209,25 +72,44 @@ def chat_endpoint(req: func.HttpRequest) -> func.HttpResponse:
         "Content-Type": "application/json",
     }
 
-    # Reintentar inicialización si es necesario
+    # Debug info
+    logging.info(f"API Key configured: {bool(API_KEY)}")
+    logging.info(f"Project client initialized: {bool(project)}")
+
+    # Verificar configuración
+    if not API_KEY:
+        error_msg = {
+            "error": "Configuración incompleta",
+            "details": "API Key no está configurada en las variables de entorno",
+            "debug": {
+                "api_key_present": False,
+                "env_vars_with_azure": [k for k in os.environ.keys() if "AZURE" in k][
+                    :5
+                ],  # Solo mostrar 5
+            },
+        }
+        logging.error(f"Error response: {error_msg}")
+        return func.HttpResponse(
+            json.dumps(error_msg),
+            status_code=500,
+            headers=headers,
+        )
+
     if not project:
-        logging.info("Cliente no inicializado, reintentando...")
-        if not initialize_client():
-            return func.HttpResponse(
-                json.dumps(
-                    {
-                        "error": "Servicio no disponible",
-                        "details": "No se puede conectar con Azure AI",
-                        "initialization_error": initialization_error,
-                        "suggestion": "Verifica la configuración de AZURE_AI_API_KEY",
-                    }
-                ),
-                status_code=503,
-                headers=headers,
-            )
+        error_msg = {
+            "error": "Servicio no disponible",
+            "details": "El cliente de AI no está inicializado",
+            "initialization_error": initialization_error,
+        }
+        logging.error(f"Error response: {error_msg}")
+        return func.HttpResponse(
+            json.dumps(error_msg),
+            status_code=503,
+            headers=headers,
+        )
 
     try:
-        # Obtener mensaje del request
+        # Obtener el body del request
         req_body = req.get_json()
         if not req_body or "message" not in req_body:
             return func.HttpResponse(
@@ -237,43 +119,37 @@ def chat_endpoint(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         user_message = req_body["message"]
-        session_id = req_body.get("session_id", "default")
-
-        logging.info(
-            f"Procesando mensaje: '{user_message[:50]}...' (session: {session_id})"
-        )
+        logging.info(f"Processing message: '{user_message[:50]}...'")
 
         # Obtener el agente
+        logging.info(f"Getting agent with ID: {AGENT_ID}")
         agent = project.agents.get_agent(AGENT_ID)
-        logging.info(f"✅ Agente obtenido: {agent.id}")
+        logging.info(f"✅ Agent retrieved: {agent.id}")
 
         # Crear thread
         thread = project.agents.threads.create()
-        logging.info(f"✅ Thread creado: {thread.id}")
+        logging.info(f"✅ Thread created: {thread.id}")
 
         # Crear mensaje
         message = project.agents.messages.create(
             thread_id=thread.id, role="user", content=user_message
         )
-        logging.info("✅ Mensaje creado")
+        logging.info("✅ Message created")
 
-        # Ejecutar el agente con timeout
-        logging.info("Ejecutando agente...")
+        # Ejecutar el agente
+        logging.info("Starting agent run...")
         run = project.agents.runs.create_and_process(
             thread_id=thread.id, agent_id=agent.id
         )
-
-        logging.info(f"✅ Run completado con estado: {run.status}")
+        logging.info(f"✅ Run completed with status: {run.status}")
 
         if run.status == "failed":
-            error_details = (
-                str(run.last_error) if run.last_error else "Error desconocido"
-            )
-            logging.error(f"Run falló: {error_details}")
+            error_details = str(run.last_error) if run.last_error else "Unknown error"
+            logging.error(f"Run failed: {error_details}")
             return func.HttpResponse(
                 json.dumps(
                     {
-                        "error": "El agente no pudo procesar la consulta",
+                        "error": "El agente no pudo procesar tu consulta",
                         "details": error_details,
                     }
                 ),
@@ -281,35 +157,30 @@ def chat_endpoint(req: func.HttpRequest) -> func.HttpResponse:
                 headers=headers,
             )
 
-        # Obtener respuesta
+        # Obtener mensajes
         messages = project.agents.messages.list(
             thread_id=thread.id, order=ListSortOrder.ASCENDING
         )
 
-        # Extraer última respuesta del bot
+        # Extraer respuesta
         bot_response = "Lo siento, no pude generar una respuesta."
         for msg in reversed(list(messages)):
             if msg.role != "user" and msg.text_messages:
                 bot_response = msg.text_messages[-1].text.value
                 break
 
-        logging.info("✅ Respuesta generada exitosamente")
+        logging.info("✅ Response generated successfully")
 
         return func.HttpResponse(
             json.dumps(
-                {
-                    "response": bot_response,
-                    "thread_id": thread.id,
-                    "status": "success",
-                    "session_id": session_id,
-                }
+                {"response": bot_response, "thread_id": thread.id, "status": "success"}
             ),
             status_code=200,
             headers=headers,
         )
 
     except Exception as e:
-        logging.error(f"❌ Error inesperado: {str(e)}", exc_info=True)
+        logging.error(f"❌ Unexpected error: {str(e)}", exc_info=True)
         return func.HttpResponse(
             json.dumps(
                 {
@@ -325,7 +196,7 @@ def chat_endpoint(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="chat", methods=["OPTIONS"])
 def chat_options(req: func.HttpRequest) -> func.HttpResponse:
-    """Manejo de CORS preflight"""
+    logging.info("OPTIONS request received")
     headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -335,38 +206,77 @@ def chat_options(req: func.HttpRequest) -> func.HttpResponse:
     return func.HttpResponse("", status_code=204, headers=headers)
 
 
-@app.route(route="debug", methods=["GET"])
-def debug_endpoint(req: func.HttpRequest) -> func.HttpResponse:
-    """Endpoint de debug para verificar configuración"""
-    headers = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
+@app.route(route="health", methods=["GET"])
+def health_check(req: func.HttpRequest) -> func.HttpResponse:
+    """Health check endpoint con información detallada"""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
+    }
 
-    # Obtener todas las variables que contienen "AZURE" o "AI"
-    relevant_vars = {}
-    for key in os.environ:
-        if "AZURE" in key.upper() or "AI" in key.upper() or "API" in key.upper():
-            value = os.environ[key]
-            # Ocultar parcialmente valores sensibles
-            if len(value) > 10:
-                masked_value = f"{value[:5]}...{value[-5:]}"
-            else:
-                masked_value = "***"
-            relevant_vars[key] = masked_value
-
-    debug_info = {
+    # Información detallada para debugging
+    health_status = {
+        "status": "checking",
         "timestamp": datetime.utcnow().isoformat(),
-        "relevant_variables": relevant_vars,
-        "total_env_vars": len(os.environ),
+        "api_key_configured": bool(API_KEY),
+        "api_key_length": len(API_KEY) if API_KEY else 0,
         "client_initialized": bool(project),
         "initialization_error": initialization_error,
-        "runtime": {
+        "agent_id": AGENT_ID,
+        "environment": {
+            "total_vars": len(os.environ),
+            "azure_vars": [k for k in os.environ.keys() if "AZURE" in k][
+                :10
+            ],  # Primeras 10
             "python_version": os.sys.version,
-            "functions_version": os.environ.get(
-                "FUNCTIONS_EXTENSION_VERSION", "unknown"
-            ),
-            "platform": os.environ.get("WEBSITE_PLATFORM_VERSION", "unknown"),
         },
     }
 
+    if not API_KEY:
+        health_status["status"] = "unhealthy"
+        health_status["error"] = "API Key not configured"
+        health_status["solution"] = "Add AZURE_AI_API_KEY to Function App Configuration"
+    elif not project:
+        health_status["status"] = "unhealthy"
+        health_status["error"] = "AI Client not initialized"
+        health_status["solution"] = "Check API Key format and endpoint configuration"
+    else:
+        try:
+            # Intentar obtener el agente
+            agent = project.agents.get_agent(AGENT_ID)
+            health_status["status"] = "healthy"
+            health_status["agent_connected"] = True
+            status_code = 200
+        except Exception as e:
+            health_status["status"] = "unhealthy"
+            health_status["error"] = f"Cannot connect to agent: {str(e)}"
+            health_status["solution"] = "Verify API Key permissions and agent ID"
+            status_code = 503
+
+    if health_status["status"] == "unhealthy":
+        status_code = 503
+
     return func.HttpResponse(
-        json.dumps(debug_info, indent=2), status_code=200, headers=headers
+        json.dumps(health_status, indent=2), status_code=status_code, headers=headers
+    )
+
+
+@app.route(route="test", methods=["GET"])
+def test_endpoint(req: func.HttpRequest) -> func.HttpResponse:
+    """Endpoint de prueba simple"""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
+    }
+
+    return func.HttpResponse(
+        json.dumps(
+            {
+                "message": "Function App is running",
+                "timestamp": datetime.utcnow().isoformat(),
+                "api_key_present": bool(os.getenv("AZURE_AI_API_KEY")),
+            }
+        ),
+        status_code=200,
+        headers=headers,
     )
