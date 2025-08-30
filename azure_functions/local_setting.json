@@ -1,11 +1,11 @@
 {
     "IsEncrypted": false,
     "Values": {
-        "FUNCTIONS_WORKER_RUNTIME": "python",
         "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-        "AZURE_CLIENT_ID": "YOUR_CLIENT_ID_HERE",
-        "AZURE_CLIENT_SECRET": "YOUR_CLIENT_SECRET_HERE",
-        "AZURE_TENANT_ID": "YOUR_TENANT_ID_HERE",
+        "FUNCTIONS_WORKER_RUNTIME": "python",
+        "AZURE_CLIENT_ID": "427849f2-551f-4019-8dc6-e808b62",
+        "AZURE_CLIENT_SECRET": "_z18Q~xjxawWh5FwFIdrSYe7T7LeflI",
+        "AZURE_TENANT_ID": "9f7ea239-412b-4a34-b2a9-bbcbebc",
         "AZURE_AI_API_KEY": "YOUR_API_KEY_HERE"
     }
 }
