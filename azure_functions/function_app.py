@@ -355,7 +355,7 @@ def debug_endpoint(req: func.HttpRequest) -> func.HttpResponse:
     debug_info = {
         "timestamp": datetime.utcnow().isoformat(),
         "relevant_variables": relevant_vars,
-        "total_env_vars": len(os.senviron),
+        "total_env_vars": len(os.environ),
         "client_initialized": bool(project),
         "initialization_error": initialization_error,
         "runtime": {
