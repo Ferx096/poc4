@@ -4,8 +4,7 @@ import logging
 import os
 from datetime import datetime
 from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
-from azure.core.credentials import AzureKeyCredential
+from azure.identity import ManagedIdentityCredential
 from azure.ai.agents.models import ListSortOrder
 
 # Configurar logging
@@ -13,162 +12,118 @@ logging.basicConfig(level=logging.INFO)
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-# Constantes
-AGENT_ID = "asst_XizkjMGP4EQaFZYnygjH8BET"
+# Constantes - Puedes obtener estas de variables de entorno si prefieres
+AGENT_ID = os.environ.get("AZURE_EXISTING_AGENT_ID", "asst_XizkjMGP4EQaFZYnygjH8BET")
 PROJECT_ENDPOINT = "https://ia-analytics.services.ai.azure.com/"
 PROJECT_NAME = "PoC"
 
 # Variables globales
 project = None
 initialization_error = None
-auth_method = "checking"
 
 
 def initialize_client():
-    """Inicializa el cliente con Managed Identity o API Key"""
-    global project, initialization_error, auth_method
+    """Inicializa el cliente usando Managed Identity"""
+    global project, initialization_error
 
     try:
-        logging.info("=== INICIANDO CLIENTE DE AI ===")
+        logging.info("=== INICIANDO CLIENTE CON MANAGED IDENTITY ===")
 
-        # Opción 1: Intentar con API Key primero (por si acaso funciona)
-        api_key = os.environ.get("AZURE_AI_API_KEY")
+        # Verificar que Managed Identity esté disponible
+        msi_endpoint = os.environ.get("MSI_ENDPOINT")
+        identity_endpoint = os.environ.get("IDENTITY_ENDPOINT")
 
-        if api_key:
-            logging.info(f"✅ API Key encontrada, intentando autenticación con Key...")
-            try:
-                project = AIProjectClient(
-                    credential=AzureKeyCredential(api_key.strip()),
-                    endpoint=PROJECT_ENDPOINT,
-                    project_name=PROJECT_NAME,
-                )
-                # Verificar conexión
-                agent = project.agents.get_agent(AGENT_ID)
-                logging.info(f"✅ Conectado con API Key. Agente: {agent.id}")
-                auth_method = "api_key"
-                return True
-            except Exception as e:
-                logging.warning(f"⚠️ API Key no funcionó: {str(e)}")
+        if not (msi_endpoint or identity_endpoint):
+            raise Exception("Managed Identity no está habilitada en esta Function App")
 
-        # Opción 2: Usar Managed Identity
-        logging.info("🔐 Intentando con Managed Identity...")
+        logging.info(f"✅ Managed Identity disponible")
+        logging.info(f"   MSI_ENDPOINT: {msi_endpoint}")
+        logging.info(f"   IDENTITY_ENDPOINT: {identity_endpoint}")
 
-        # Verificar si estamos en Azure con MSI habilitado
-        if os.environ.get("MSI_ENDPOINT") or os.environ.get("IDENTITY_ENDPOINT"):
-            try:
-                # Usar ManagedIdentityCredential específicamente
-                credential = ManagedIdentityCredential()
+        # Crear credencial con Managed Identity
+        credential = ManagedIdentityCredential()
 
-                project = AIProjectClient(
-                    credential=credential,
-                    endpoint=PROJECT_ENDPOINT,
-                    project_name=PROJECT_NAME,
-                )
+        # Crear cliente de AI Projects
+        project = AIProjectClient(
+            credential=credential, endpoint=PROJECT_ENDPOINT, project_name=PROJECT_NAME
+        )
 
-                # Verificar conexión
-                agent = project.agents.get_agent(AGENT_ID)
-                logging.info(f"✅ Conectado con Managed Identity. Agente: {agent.id}")
-                auth_method = "managed_identity"
-                return True
+        # Verificar que podemos acceder al agente
+        logging.info(f"Verificando acceso al agente {AGENT_ID}...")
+        agent = project.agents.get_agent(AGENT_ID)
+        logging.info(f"✅ Cliente inicializado exitosamente")
+        logging.info(f"   Agente: {agent.id}")
+        logging.info(f"   Nombre: {agent.name if hasattr(agent, 'name') else 'N/A'}")
 
-            except Exception as e:
-                logging.error(f"❌ Error con Managed Identity: {str(e)}")
-                initialization_error = f"Managed Identity falló: {str(e)}"
-        else:
-            logging.error(
-                "❌ MSI_ENDPOINT no encontrado. Managed Identity no está habilitada."
-            )
-            initialization_error = (
-                "Managed Identity no está habilitada en esta Function App"
-            )
-
-        # Opción 3: Intentar con DefaultAzureCredential como último recurso
-        try:
-            logging.info("🔑 Último intento con DefaultAzureCredential...")
-            credential = DefaultAzureCredential()
-
-            project = AIProjectClient(
-                credential=credential,
-                endpoint=PROJECT_ENDPOINT,
-                project_name=PROJECT_NAME,
-            )
-
-            agent = project.agents.get_agent(AGENT_ID)
-            logging.info(f"✅ Conectado con DefaultAzureCredential. Agente: {agent.id}")
-            auth_method = "default_credential"
-            return True
-
-        except Exception as e:
-            logging.error(f"❌ DefaultAzureCredential también falló: {str(e)}")
-            initialization_error = (
-                f"Ningún método de autenticación funcionó. Último error: {str(e)}"
-            )
-            return False
+        return True
 
     except Exception as e:
-        initialization_error = f"Error crítico: {str(e)}"
-        logging.error(f"❌ {initialization_error}")
+        initialization_error = str(e)
+        logging.error(f"❌ Error inicializando cliente: {initialization_error}")
+
+        # Dar información específica sobre el error
+        if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e):
+            logging.error(
+                "⚠️ Error de permisos. Asegúrate de que la Managed Identity tiene el rol 'Cognitive Services User' en el recurso IA-Analytics"
+            )
+        elif "404" in str(e):
+            logging.error(
+                "⚠️ Agente no encontrado. Verifica que el AGENT_ID sea correcto"
+            )
+
         project = None
         return False
 
 
 # Inicializar al arrancar
-logging.info("=== INICIANDO FUNCTION APP ===")
+logging.info("=== INICIANDO AZURE FUNCTION APP ===")
 initialize_client()
 
 
 @app.route(route="health", methods=["GET"])
 def health_check(req: func.HttpRequest) -> func.HttpResponse:
-    """Health check con información detallada"""
-    logging.info("Health check llamado")
+    """Health check endpoint"""
+    logging.info("Health check endpoint llamado")
 
     headers = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
 
-    # Reintentar si falló
+    # Reintentar si no está inicializado
     if not project:
-        logging.info("Reintentando inicialización...")
+        logging.info("Cliente no inicializado, reintentando...")
         initialize_client()
 
     health_status = {
         "status": "healthy" if project else "unhealthy",
         "timestamp": datetime.utcnow().isoformat(),
+        "service": "AFP Prima Chat Agent",
         "authentication": {
-            "method_used": auth_method,
-            "client_initialized": bool(project),
-            "api_key_present": bool(os.environ.get("AZURE_AI_API_KEY")),
-            "msi_endpoint": bool(os.environ.get("MSI_ENDPOINT")),
-            "identity_endpoint": bool(os.environ.get("IDENTITY_ENDPOINT")),
-            "managed_identity_available": bool(
-                os.environ.get("MSI_ENDPOINT") or os.environ.get("IDENTITY_ENDPOINT")
-            ),
+            "method": "Managed Identity",
+            "initialized": bool(project),
+            "msi_available": bool(os.environ.get("MSI_ENDPOINT")),
+            "identity_available": bool(os.environ.get("IDENTITY_ENDPOINT")),
         },
         "configuration": {
             "agent_id": AGENT_ID,
             "endpoint": PROJECT_ENDPOINT,
-            "project_name": PROJECT_NAME,
+            "project": PROJECT_NAME,
         },
-        "error": initialization_error if not project else None,
     }
 
-    # Agregar sugerencias si hay problemas
     if not project:
-        if not os.environ.get("MSI_ENDPOINT") and not os.environ.get(
-            "IDENTITY_ENDPOINT"
-        ):
-            health_status["solution"] = {
-                "message": "Managed Identity no está habilitada",
-                "steps": [
-                    "1. Ve a tu Function App en Azure Portal",
-                    "2. Identidad → Asignado por el sistema",
-                    "3. Cambia Estado a 'Activado'",
-                    "4. Guardar",
-                    "5. Ve a tu recurso IA-Analytics",
-                    "6. Control de acceso (IAM)",
-                    "7. Agregar asignación de rol",
-                    "8. Selecciona 'Cognitive Services User'",
-                    "9. Asigna a la identidad de tu Function App",
-                ],
-            }
+        health_status["error"] = initialization_error
+        health_status["troubleshooting"] = {
+            "message": "El cliente no se pudo inicializar",
+            "possible_causes": [
+                "Managed Identity no tiene permisos en IA-Analytics",
+                "El AGENT_ID es incorrecto",
+                "El endpoint o proyecto son incorrectos",
+            ],
+            "solution": [
+                "1. Verificar que Managed Identity está habilitada",
+                "2. Asignar rol 'Cognitive Services User' a la Function App en IA-Analytics",
+                "3. Verificar que el AGENT_ID existe en el proyecto",
+            ],
+        }
 
     status_code = 200 if project else 503
 
@@ -179,16 +134,16 @@ def health_check(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="test", methods=["GET"])
 def test_endpoint(req: func.HttpRequest) -> func.HttpResponse:
-    """Test endpoint"""
+    """Simple test endpoint"""
     headers = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
 
     return func.HttpResponse(
         json.dumps(
             {
-                "message": "Function App is running",
+                "status": "running",
+                "message": "Azure Function App está funcionando",
                 "timestamp": datetime.utcnow().isoformat(),
-                "auth_method": auth_method,
-                "client_ready": bool(project),
+                "ready": bool(project),
             },
             indent=2,
         ),
@@ -204,129 +159,203 @@ def chat_endpoint(req: func.HttpRequest) -> func.HttpResponse:
 
     headers = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "Content-Type": "application/json",
     }
 
+    # Verificar que el cliente esté inicializado
     if not project:
+        logging.warning("Cliente no inicializado, intentando reinicializar...")
         if not initialize_client():
             return func.HttpResponse(
                 json.dumps(
-                    {"error": "Servicio no disponible", "details": initialization_error}
+                    {
+                        "error": "Servicio temporalmente no disponible",
+                        "details": "No se puede conectar con el agente de AI",
+                        "message": initialization_error,
+                    }
                 ),
                 status_code=503,
                 headers=headers,
             )
 
     try:
+        # Parsear el request
         req_body = req.get_json()
         if not req_body or "message" not in req_body:
             return func.HttpResponse(
-                json.dumps({"error": "Mensaje requerido"}),
+                json.dumps(
+                    {
+                        "error": "Solicitud inválida",
+                        "details": "El campo 'message' es requerido",
+                    }
+                ),
                 status_code=400,
                 headers=headers,
             )
 
         user_message = req_body["message"]
-        logging.info(f"Procesando: {user_message[:50]}...")
+        session_id = req_body.get("session_id", "default")
 
-        # Interactuar con el agente
+        logging.info(
+            f"Mensaje recibido: '{user_message[:100]}...' (session: {session_id})"
+        )
+
+        # Obtener el agente
         agent = project.agents.get_agent(AGENT_ID)
-        thread = project.agents.threads.create()
 
+        # Crear un nuevo thread para la conversación
+        thread = project.agents.threads.create()
+        logging.info(f"Thread creado: {thread.id}")
+
+        # Agregar el mensaje del usuario
         message = project.agents.messages.create(
             thread_id=thread.id, role="user", content=user_message
         )
+        logging.info(f"Mensaje agregado al thread")
 
+        # Ejecutar el agente
+        logging.info("Ejecutando el agente...")
         run = project.agents.runs.create_and_process(
             thread_id=thread.id, agent_id=agent.id
         )
 
+        logging.info(f"Run completado con estado: {run.status}")
+
+        # Verificar si el run fue exitoso
         if run.status == "failed":
+            error_details = (
+                str(run.last_error) if run.last_error else "Error desconocido"
+            )
+            logging.error(f"El agente falló: {error_details}")
             return func.HttpResponse(
                 json.dumps(
                     {
-                        "error": "Error procesando mensaje",
-                        "details": str(run.last_error) if run.last_error else "Unknown",
+                        "error": "El agente no pudo procesar tu consulta",
+                        "details": error_details,
                     }
                 ),
                 status_code=500,
                 headers=headers,
             )
 
-        # Obtener respuesta
+        # Obtener los mensajes del thread
         messages = project.agents.messages.list(
             thread_id=thread.id, order=ListSortOrder.ASCENDING
         )
 
-        bot_response = "No se pudo generar respuesta"
-        for msg in reversed(list(messages)):
-            if msg.role != "user" and msg.text_messages:
+        # Extraer la respuesta del bot
+        bot_response = None
+        for msg in messages:
+            if msg.role == "assistant" and msg.text_messages:
                 bot_response = msg.text_messages[-1].text.value
-                break
 
+        if not bot_response:
+            bot_response = (
+                "Lo siento, no pude generar una respuesta. Por favor, intenta de nuevo."
+            )
+
+        logging.info(f"Respuesta generada exitosamente")
+
+        # Retornar la respuesta
         return func.HttpResponse(
-            json.dumps({"response": bot_response, "status": "success"}),
+            json.dumps(
+                {
+                    "response": bot_response,
+                    "thread_id": thread.id,
+                    "session_id": session_id,
+                    "status": "success",
+                }
+            ),
             status_code=200,
             headers=headers,
         )
 
     except Exception as e:
-        logging.error(f"Error: {str(e)}", exc_info=True)
+        logging.error(f"Error en chat endpoint: {str(e)}", exc_info=True)
         return func.HttpResponse(
-            json.dumps({"error": str(e)}), status_code=500, headers=headers
+            json.dumps(
+                {
+                    "error": "Error interno del servidor",
+                    "details": str(e),
+                    "type": type(e).__name__,
+                }
+            ),
+            status_code=500,
+            headers=headers,
         )
 
 
 @app.route(route="chat", methods=["OPTIONS"])
 def chat_options(req: func.HttpRequest) -> func.HttpResponse:
-    """CORS preflight"""
-    return func.HttpResponse(
-        "",
-        status_code=204,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        },
-    )
+    """Handle CORS preflight requests"""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "3600",
+    }
+    return func.HttpResponse("", status_code=204, headers=headers)
 
 
 @app.route(route="debug", methods=["GET"])
 def debug_endpoint(req: func.HttpRequest) -> func.HttpResponse:
-    """Debug endpoint mejorado"""
+    """Debug endpoint para diagnóstico"""
     headers = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
 
+    # Información de debug
     debug_info = {
         "timestamp": datetime.utcnow().isoformat(),
-        "authentication_status": {
-            "method_attempted": auth_method,
+        "status": {
             "client_initialized": bool(project),
-            "error": initialization_error,
+            "last_error": initialization_error,
         },
-        "environment_checks": {
-            "api_key_configured": bool(os.environ.get("AZURE_AI_API_KEY")),
+        "managed_identity": {
             "msi_endpoint": os.environ.get("MSI_ENDPOINT", "Not found"),
             "identity_endpoint": os.environ.get("IDENTITY_ENDPOINT", "Not found"),
             "identity_header": os.environ.get("IDENTITY_HEADER", "Not found"),
-            "managed_identity_ready": bool(
+            "available": bool(
                 os.environ.get("MSI_ENDPOINT") or os.environ.get("IDENTITY_ENDPOINT")
             ),
         },
-        "azure_variables": {},
+        "configuration": {
+            "agent_id": AGENT_ID,
+            "project_endpoint": PROJECT_ENDPOINT,
+            "project_name": PROJECT_NAME,
+        },
+        "runtime": {
+            "python_version": os.sys.version,
+            "functions_version": os.environ.get(
+                "FUNCTIONS_EXTENSION_VERSION", "Unknown"
+            ),
+        },
     }
 
-    # Listar variables Azure
-    for key in sorted(os.environ.keys()):
-        if any(term in key.upper() for term in ["AZURE", "MSI", "IDENTITY", "API"]):
-            value = os.environ[key]
-            if len(value) > 30:
-                masked = f"{value[:10]}...{value[-10:]}"
-            else:
-                masked = "***"
-            debug_info["azure_variables"][key] = masked
+    # Si hay error, agregar información de troubleshooting
+    if not project and initialization_error:
+        if "401" in str(initialization_error) or "403" in str(initialization_error):
+            debug_info["troubleshooting"] = {
+                "error_type": "Authorization Error",
+                "message": "La Managed Identity no tiene permisos en el recurso",
+                "solution": "Asignar el rol 'Cognitive Services User' a la Function App en IA-Analytics",
+            }
+        elif "404" in str(initialization_error):
+            debug_info["troubleshooting"] = {
+                "error_type": "Not Found Error",
+                "message": "El agente o recurso no se encontró",
+                "solution": "Verificar que el AGENT_ID y PROJECT_NAME sean correctos",
+            }
 
     return func.HttpResponse(
         json.dumps(debug_info, indent=2), status_code=200, headers=headers
     )
+
+
+# Log de inicio
+logging.info("=== AZURE FUNCTION APP INICIADA ===")
+logging.info(f"Agent ID: {AGENT_ID}")
+logging.info(f"Endpoint: {PROJECT_ENDPOINT}")
+logging.info(f"Project: {PROJECT_NAME}")
+logging.info(f"MSI Disponible: {bool(os.environ.get('MSI_ENDPOINT'))}")
+logging.info(f"Identity Disponible: {bool(os.environ.get('IDENTITY_ENDPOINT'))}")
