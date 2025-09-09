@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFP Prima - Tu Futuro, Nuestra Prioridad</title>
+    <meta name="description"
+        content="Asistente AI especializado en AFP Prima. Consulta sobre tu fondo de pensiones, aportes, rentabilidad y trámites.">
+    <meta name="keywords" content="AFP Prima, fondo de pensiones, AFP, jubilación, aportes, rentabilidad">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="AFP Prima - Asistente AI">
+    <meta property="og:description" content="Tu asistente personal para consultas sobre fondos de pensiones AFP Prima">
+    <meta property="og:type" content="website">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA4SDE4VjEwSDE2VjI0SDE0VjEwSDEwVjhaTTIwIDEwVjEySDIyVjI0SDI0VjEySDE4VjEwSDIwWiIgZmlsbD0id2hpdGUiLz4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQwIiB4MT0iMCIgeTE9IjAiIHgyPSIzMiIgeTI9IjMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiNGRjQ1MDAiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkY2QTAwIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --primary-orange: #FF4500;
+            --secondary-orange: #FF6A00;
+            --white: #FFFFFF;
+            --text-dark: #333333;
+            --light-orange: #FFF4F0;
+            --shadow: 0 4px 20px rgba(255, 69, 0, 0.1);
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: linear-gradient(135deg, var(--light-orange) 0%, var(--white) 100%);
+            min-height: 100vh;
+        }
+
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1001;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-online {
+            background: var(--success);
+        }
+
+        .status-offline {
+            background: var(--danger);
+        }
+
+        .status-connecting {
+            background: var(--warning);
+            color: #333;
+        }
+
+        /* Chat Styles */
+        .chat-bubble {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+        }
+
+        .chat-button {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, var(--primary-orange) 0%, var(--secondary-orange) 100%);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(255, 69, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .chat-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(255, 69, 0, 0.4);
+        }
+
+        .chat-button svg {
+            width: 34px;
+            height: 34px;
+            fill: white;
+        }
+
+        /* Notification badge */
+        .chat-button::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            background: #ff0000;
+            border-radius: 50%;
+            border: 2px solid white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .chat-window {
+            position: absolute;
+            bottom: 90px;
+            right: 0;
+            width: 400px;
+            height: 500px;
+            background: var(--white);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .chat-window.show {
+            display: flex;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, var(--primary-orange) 0%, var(--secondary-orange) 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .chat-header div:first-child div {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .close-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+
+        .message {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.4;
+            animation: messageSlide 0.2s ease-out;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.bot {
+            background: #f8f9fa;
+            color: var(--text-dark);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border-left: 4px solid var(--primary-orange);
+        }
+
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            border-left: 4px solid var(--primary-orange);
+        }
+
+        .typing-dots {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .typing-dots::before {
+            content: "Escribiendo";
+            margin-right: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary-orange);
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes typing {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+
+            40% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+            resize: none;
+            min-height: 40px;
+            max-height: 100px;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary-orange);
+        }
+
+        .send-btn {
+            background: var(--primary-orange);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: var(--secondary-orange);
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Main content styles */
+        .header {
+            background: var(--white);
+            padding: 1rem 0;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-orange);
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--primary-orange);
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(255, 69, 0, 0.1);
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: var(--text-dark);
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            opacity: 0.8;
+        }
+
+        .cta-button {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 69, 0, 0.3);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 69, 0, 0.4);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 4rem;
+            padding: 0 1rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Error message styles */
+        .error-message {
+            background: #fee;
+            color: #dc3545;
+            border-left: 4px solid #dc3545;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .chat-window {
+                width: calc(100vw - 20px);
+                height: 70vh;
+                right: 10px;
+                bottom: 100px;
+                left: 10px;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .main-content {
+                padding: 2rem 1rem;
+            }
+
+            .connection-status {
+                top: 10px;
+                right: 10px;
+                font-size: 10px;
+                padding: 6px 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-button {
+                width: 60px;
+                height: 60px;
+                bottom: 20px;
+                right: 20px;
+            }
+
+            .chat-button svg {
+                width: 28px;
+                height: 28px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status status-connecting">
+        🟡 Conectando...
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav-container">
+            <div class="logo">
+                <div class="logo-icon">P</div>
+                <span class="logo-text">AFP Prima</span>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <h1 class="hero-title">Tu Futuro, Nuestra Prioridad</h1>
+        <p class="hero-subtitle">
+            Descubre cómo AFP Prima puede ayudarte con consultas sobre tu fondo de pensiones, aportes, rentabilidad y
+            trámites administrativos usando nuestro asistente inteligente.
+        </p>
+        <button class="cta-button" onclick="toggleChat()">Habla con nuestro Asistente IA</button>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">💰</div>
+                <h3>Consulta tu Saldo</h3>
+                <p>Información actualizada sobre tu fondo de pensiones y aportes</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📈</div>
+                <h3>Rentabilidad</h3>
+                <p>Conoce el rendimiento de tu fondo y las opciones disponibles</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📋</div>
+                <h3>Trámites</h3>
+                <p>Orientación sobre traspasos, retiros y procedimientos</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Chatbot -->
+    <div class="chat-bubble">
+        <button class="chat-button" onclick="toggleChat()" title="Habla con nuestro asistente IA">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9V7H18V9H6M14,11V13H6V11H14M18,15H6V17H18V15Z" />
+            </svg>
+        </button>
+
+        <div class="chat-window" id="chatWindow">
+            <div class="chat-header">
+                <div>
+                    <h3>Asistente AFP Prima</h3>
+                    <div>Especialista en fondos de pensiones</div>
+                </div>
+                <button class="close-btn" onclick="toggleChat()" title="Cerrar chat">×</button>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    ¡Hola! Soy tu asistente especializado de AFP Prima.
+                    <br><br>
+                    Puedo ayudarte con:<br>
+                    • Consultas sobre tu fondo de pensiones<br>
+                    • Información de aportes y rentabilidad<br>
+                    • Trámites y procedimientos<br>
+                    • Preguntas generales sobre AFP<br>
+                    <br>
+                    ¿En qué puedo asistirte hoy?
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <input type="text" id="chatInput" class="chat-input" placeholder="Escribe tu consulta sobre AFP..."
+                    onkeypress="handleKeyPress(event)" maxlength="500">
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Enviar mensaje">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chatOpen = false;
+        let messageCount = 0;
+        let conversationHistory = [];
+
+        // 🔧 CONFIGURACIÓN - Basada en las variables de tu test.py
+        const CONFIG = {
+            // Endpoint principal del agente
+            AGENT_ENDPOINT: 'https://poc4-chatbotke.services.ai.azure.com/api/projects/project_poc4',
+            
+            // Azure Functions URLs - Actualiza con tu Function App URL real
+            PROCESS_AGENT_ENDPOINT: 'https://functionspoc4-aehcgsgebybcgvc3.canadacentral-01.azurewebsites.net/api/ProcessAgentConversation',
+            SEARCH_ENDPOINT: 'https://functionspoc4-aehcgsgebybcgvc3.canadacentral-01.azurewebsites.net/api/DirectSearchQuery',
+            HEALTH_ENDPOINT: 'https://functionspoc4-aehcgsgebybcgvc3.canadacentral-01.azurewebsites.net/api/HealthCheck',
+            
+            // Configuración del agente
+            AGENT_ID: 'asst_en6V1SeMASo2plGkQqMictdi',
+            PROJECT_ENDPOINT: 'https://poc4-chatbotke.services.ai.azure.com/api/projects/project_poc4',
+            
+            // Búsqueda
+            SEARCH_ENDPOINT_AZURE: 'https://storage-poc.search.windows.net',
+            SEARCH_INDEX_NAME: 'index-poc4',
+            
+            // ID único de sesión para mantener el contexto
+            SESSION_ID: `afp_prima_session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            
+            // Configuración de timeouts
+            REQUEST_TIMEOUT: 30000, // 30 segundos
+            RECONNECT_INTERVAL: 30000, // 30 segundos
+            
+            // Configuración de retry
+            MAX_RETRIES: 3,
+            RETRY_DELAY: 1000 // 1 segundo
+        };
+
+        // Estado de conexión
+        let isConnected = false;
+        let retryCount = 0;
+
+        // Verificar salud del servicio al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServiceHealth();
+            // Verificar salud cada 30 segundos
+            setInterval(checkServiceHealth, 30000);
+        });
+
+        async function checkServiceHealth() {
+            try {
+                const response = await fetch(CONFIG.HEALTH_ENDPOINT, {
+                    method: 'GET',
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    updateConnectionStatus('online');
+                } else {
+                    updateConnectionStatus('offline');
+                }
+            } catch (error) {
+                updateConnectionStatus('offline');
+                console.warn('Health check failed:', error);
+            }
+        }
+
+        function updateConnectionStatus(status, message = '') {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.className = `connection-status status-${status}`;
+
+            const messages = {
+                'online': '🟢 Sistema en línea',
+                'connecting': '🟡 Conectando...',
+                'offline': '🔴 Sistema sin conexión'
+            };
+
+            statusElement.textContent = message || messages[status];
+            isConnected = status === 'online';
+        }
+
+        function toggleChat() {
+            const chatWindow = document.getElementById('chatWindow');
+            const chatButton = document.querySelector('.chat-button');
+
+            chatOpen = !chatOpen;
+
+            if (chatOpen) {
+                chatWindow.classList.add('show');
+                document.getElementById('chatInput').focus();
+                // Remover badge de notificación
+                chatButton.style.setProperty('--notification', 'none');
+                trackEvent('chat_opened');
+            } else {
+                chatWindow.classList.remove('show');
+                trackEvent('chat_closed');
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function addMessage(content, isUser = false, isError = false) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+
+            if (isError) {
+                messageDiv.classList.add('error-message');
+                content = `⚠️ ${content}`;
+            }
+
+            // Convertir URLs en enlaces
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            content = content.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+
+            // Convertir saltos de línea
+            messageDiv.innerHTML = content.replace(/\n/g, '<br>');
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Guardar en historial de conversación
+            conversationHistory.push({
+                content: content,
+                isUser: isUser,
+                timestamp: new Date().toISOString()
+            });
+
+            // Incrementar contador de mensajes
+            messageCount++;
+        }
+
+        async function sendMessage() {
+            const chatInput = document.getElementById('chatInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const typingIndicator = document.getElementById('typingIndicator');
+
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Validar longitud del mensaje
+            if (message.length > 500) {
+                addMessage('El mensaje es demasiado largo. Por favor, usa máximo 500 caracteres.', false, true);
+                return;
+            }
+
+            // Deshabilitar controles
+            chatInput.disabled = true;
+            sendBtn.disabled = true;
+            updateConnectionStatus('connecting', '🟡 Procesando...');
+
+            // Agregar mensaje del usuario
+            addMessage(message, true);
+
+            // Limpiar input
+            chatInput.value = '';
+
+            // Mostrar indicador de escritura
+            typingIndicator.style.display = 'flex';
+
+            try {
+                const response = await sendMessageWithRetry(message);
+                
+                // Ocultar indicador de escritura
+                typingIndicator.style.display = 'none';
+
+                if (response.success) {
+                    addMessage(response.content);
+                    updateConnectionStatus('online');
+                    retryCount = 0; // Reset retry count on success
+                    trackEvent('message_sent_success');
+                } else {
+                    addMessage(response.error || 'Error procesando tu mensaje.', false, true);
+                    updateConnectionStatus('offline');
+                    trackEvent('message_sent_error', { error: response.error });
+                }
+
+            } catch (error) {
+                console.error('💥 Error enviando mensaje:', error);
+                typingIndicator.style.display = 'none';
+                updateConnectionStatus('offline');
+                
+                addMessage(
+                    'Error de conexión. Por favor, verifica tu internet e inténtalo nuevamente.',
+                    false, 
+                    true
+                );
+                trackEvent('message_send_failed', { error: error.message });
+
+            } finally {
+                // Rehabilitar controles
+                chatInput.disabled = false;
+                sendBtn.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        async function sendMessageWithRetry(message, attempt = 1) {
+            try {
+                console.log(`🚀 Intento ${attempt}: Enviando mensaje al agente`);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), CONFIG.REQUEST_TIMEOUT);
+
+                // Preparar payload basado en la estructura de tu Azure Function
+                const payload = {
+                    query: message,
+                    CorrelationId: `${CONFIG.SESSION_ID}_${Date.now()}`,
+                    threadId: CONFIG.SESSION_ID,
+                    userId: 'github_pages_user',
+                    sessionId: CONFIG.SESSION_ID,
+                    metadata: {
+                        source: 'github_pages',
+                        timestamp: new Date().toISOString(),
+                        messageCount: messageCount,
+                        historyLength: conversationHistory.length,
+                        agentId: CONFIG.AGENT_ID,
+                        projectEndpoint: CONFIG.PROJECT_ENDPOINT
+                    }
+                };
+
+                // Intentar con Azure Function primero
+                const response = await fetch(CONFIG.PROCESS_AGENT_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'User-Agent': 'AFP-Prima-Chat/1.0',
+                        'X-Session-ID': CONFIG.SESSION_ID,
+                        'X-Agent-ID': CONFIG.AGENT_ID
+                    },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                console.log('📡 Respuesta recibida:', {
+                    status: response.status,
+                    statusText: response.statusText
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Datos procesados:', data);
+
+                    return {
+                        success: true,
+                        content: data.Value || data.response || data.content || 'Respuesta procesada correctamente.',
+                        metadata: data
+                    };
+                } else {
+                    // Manejar errores HTTP
+                    let errorMessage = `Error ${response.status}`;
+                    
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorData.message || errorData.Value || errorMessage;
+                    } catch (e) {
+                        errorMessage = `${errorMessage}: ${response.statusText}`;
+                    }
+
+                    // Retry logic
+                    if (attempt < CONFIG.MAX_RETRIES && response.status >= 500) {
+                        console.log(`🔄 Reintentando en ${CONFIG.RETRY_DELAY}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY));
+                        return sendMessageWithRetry(message, attempt + 1);
+                    }
+
+                    return {
+                        success: false,
+                        error: errorMessage
+                    };
+                }
+
+            } catch (error) {
+                console.error(`💥 Error en intento ${attempt}:`, error);
+
+                // Si es error de red o timeout, intentar búsqueda directa como fallback
+                if (attempt === 1 && (error.name === 'TypeError' || error.name === 'AbortError')) {
+                    console.log('🔄 Intentando búsqueda directa como fallback...');
+                    try {
+                        const fallbackResponse = await searchFallback(message);
+                        if (fallbackResponse.success) {
+                            return fallbackResponse;
+                        }
+                    } catch (fallbackError) {
+                        console.error('Fallback también falló:', fallbackError);
+                    }
+                }
+
+                // Retry logic para errores de red
+                if (attempt < CONFIG.MAX_RETRIES && (
+                    error.name === 'TypeError' || 
+                    error.name === 'AbortError' ||
+                    error.message.includes('fetch')
+                )) {
+                    console.log(`🔄 Reintentando en ${CONFIG.RETRY_DELAY * attempt}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY * attempt));
+                    return sendMessageWithRetry(message, attempt + 1);
+                }
+
+                return {
+                    success: false,
+                    error: 'Error de conexión con el servicio. Por favor, inténtalo más tarde.'
+                };
+            }
+        }
+
+        async function searchFallback(query) {
+            try {
+                const payload = {
+                    query: query,
+                    CorrelationId: `fallback_${CONFIG.SESSION_ID}_${Date.now()}`,
+                    metadata: {
+                        source: 'fallback_search',
+                        timestamp: new Date().toISOString()
+                    }
+                };
+
+                const response = await fetch(CONFIG.SEARCH_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(10000) // 10 segundos timeout para fallback
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return {
+                        success: true,
+                        content: data.Value || 'Información encontrada en la búsqueda directa.',
+                        metadata: { ...data, isFallback: true }
+                    };
+                }
+
+                return {
+                    success: false,
+                    error: 'No se pudo procesar la búsqueda.'
+                };
+
+            } catch (error) {
+                console.error('Error en búsqueda fallback:', error);
+                return {
+                    success: false,
+                    error: 'Error en búsqueda alternativa.'
+                };
+            }
+        }
+
+        // Función para tracking de eventos (analíticas básicas)
+        function trackEvent(eventName, data = {}) {
+            try {
+                const eventData = {
+                    event: eventName,
+                    timestamp: new Date().toISOString(),
+                    sessionId: CONFIG.SESSION_ID,
+                    messageCount: messageCount,
+                    ...data
+                };
+                
+                console.log('📊 Event tracked:', eventData);
+                
+                // Si tienes Google Analytics, puedes agregarlo aquí:
+                // gtag('event', eventName, data);
+                
+            } catch (error) {
+                console.warn('Error tracking event:', error);
+            }
+        }
+
+        // Función para limpiar la conversación
+        function clearConversation() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = `
+                <div class="message bot">
+                    ¡Hola! Soy tu asistente especializado de AFP Prima.
+                    <br><br>
+                    Puedo ayudarte con:<br>
+                    • Consultas sobre tu fondo de pensiones<br>
+                    • Información de aportes y rentabilidad<br>
+                    • Trámites y procedimientos<br>
+                    • Preguntas generales sobre AFP<br>
+                    <br>
+                    ¿En qué puedo asistirte hoy?
+                </div>
+            `;
+            conversationHistory = [];
+            messageCount = 0;
+            trackEvent('conversation_cleared');
+        }
+
+        // Funciones de utilidad adicionales
+        function formatTime(date) {
+            return date.toLocaleTimeString('es-PE', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        function addQuickReplies(replies) {
+            const chatMessages = document.getElementById('chatMessages');
+            const quickRepliesDiv = document.createElement('div');
+            quickRepliesDiv.className = 'quick-replies';
+            quickRepliesDiv.innerHTML = replies.map(reply => 
+                `<button class="quick-reply-btn" onclick="sendQuickReply('${reply}')">${reply}</button>`
+            ).join('');
+            chatMessages.appendChild(quickRepliesDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendQuickReply(text) {
+            document.getElementById('chatInput').value = text;
+            sendMessage();
+            // Remover botones de respuesta rápida
+            const quickReplies = document.querySelector('.quick-replies');
+            if (quickReplies) {
+                quickReplies.remove();
+            }
+        }
+
+        // Manejo de errores globales
+        window.addEventListener('error', function(event) {
+            console.error('Error global capturado:', event.error);
+            trackEvent('global_error', { 
+                message: event.error.message,
+                filename: event.filename,
+                line: event.lineno 
+            });
+        });
+
+        // Manejo de promesas rechazadas
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Promesa rechazada no manejada:', event.reason);
+            trackEvent('unhandled_rejection', { 
+                reason: event.reason.toString() 
+            });
+        });
+
+        // Detección de conexión a internet
+        window.addEventListener('online', function() {
+            updateConnectionStatus('online', '🟢 Conexión restaurada');
+            checkServiceHealth();
+        });
+
+        window.addEventListener('offline', function() {
+            updateConnectionStatus('offline', '🔴 Sin conexión a internet');
+        });
+
+        // Prevenir que se cierre accidentalmente con conversación activa
+        window.addEventListener('beforeunload', function(event) {
+            if (conversationHistory.length > 1) {
+                event.preventDefault();
+                event.returnValue = '¿Estás seguro de que quieres salir? Se perderá la conversación actual.';
+            }
+        });
+
+        // Estilos CSS adicionales para funcionalidades extra
+        const additionalStyles = `
+            <style>
+                .quick-replies {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin: 10px 0;
+                    padding: 0 5px;
+                }
+
+                .quick-reply-btn {
+                    background: white;
+                    border: 2px solid var(--primary-orange);
+                    color: var(--primary-orange);
+                    padding: 8px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    white-space: nowrap;
+                }
+
+                .quick-reply-btn:hover {
+                    background: var(--primary-orange);
+                    color: white;
+                    transform: translateY(-1px);
+                }
+
+                .message-timestamp {
+                    font-size: 10px;
+                    opacity: 0.6;
+                    margin-top: 4px;
+                }
+
+                .connection-indicator {
+                    display: inline-block;
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    margin-right: 6px;
+                }
+
+                .typing-indicator.show {
+                    display: flex;
+                }
+
+                /* Animación de carga mejorada */
+                .loading-dots {
+                    display: inline-flex;
+                    gap: 2px;
+                }
+
+                .loading-dots span {
+                    width: 4px;
+                    height: 4px;
+                    border-radius: 50%;
+                    background: var(--primary-orange);
+                    animation: loading 1.4s infinite ease-in-out both;
+                }
+
+                .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+                .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+                .loading-dots span:nth-child(3) { animation-delay: 0s; }
+
+                @keyframes loading {
+                    0%, 80%, 100% {
+                        transform: scale(0);
+                        opacity: 0.5;
+                    }
+                    40% {
+                        transform: scale(1);
+                        opacity: 1;
+                    }
+                }
+
+                /* Mejora visual para mensajes de error */
+                .message.error-message {
+                    background: linear-gradient(135deg, #fee, #fdd);
+                    border-left: 4px solid var(--danger);
+                    color: var(--danger);
+                }
+
+                /* Estilo para enlaces */
+                .message a {
+                    color: var(--primary-orange);
+                    text-decoration: underline;
+                }
+
+                .message a:hover {
+                    color: var(--secondary-orange);
+                }
+            </style>
+        `;
+
+        // Insertar estilos adicionales
+        document.head.insertAdjacentHTML('beforeend', additionalStyles);
+
+        console.log('🚀 AFP Prima Chatbot inicializado correctamente');
+        console.log('📋 Configuración:', {
+            sessionId: CONFIG.SESSION_ID,
+            agentId: CONFIG.AGENT_ID,
+            endpoints: {
+                agent: CONFIG.PROCESS_AGENT_ENDPOINT,
+                search: CONFIG.SEARCH_ENDPOINT,
+                health: CONFIG.HEALTH_ENDPOINT
+            }
+        });
+    </script>
+</body>
+
+</html>
