@@ -1,4 +1,255 @@
-<script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFP Prima Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            text-align: center;
+            color: white;
+            padding: 2rem;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+            animation: fadeInUp 1s ease-out 0.3s both;
+        }
+
+        .chat-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            animation: fadeInUp 1s ease-out 0.6s both;
+        }
+
+        .chat-button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(0,0,0,0.3);
+        }
+
+        .chat-window {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 350px;
+            height: 500px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: none;
+            flex-direction: column;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .chat-window.show {
+            display: flex;
+        }
+
+        .chat-header {
+            background: #2196F3;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 350px;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: #e3f2fd;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.bot {
+            background: #f5f5f5;
+            margin-right: auto;
+        }
+
+        .message.error-message {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef5350;
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+            resize: none;
+            max-height: 100px;
+        }
+
+        .send-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .send-btn:hover {
+            background: #1976d2;
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .connection-status {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .status-online { background: #c8e6c9; color: #2e7d32; }
+        .status-connecting { background: #fff3e0; color: #f57c00; }
+        .status-offline { background: #ffcdd2; color: #c62828; }
+
+        .close-chat {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .chat-window {
+                width: 90%;
+                height: 80%;
+                bottom: 10px;
+                right: 5%;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AFP Prima Chatbot</h1>
+        <p>Tu asistente virtual para consultas sobre AFP Prima</p>
+        <button class="chat-button" onclick="toggleChat()">
+            Iniciar Chat
+        </button>
+    </div>
+
+    <div id="chatWindow" class="chat-window">
+        <div class="chat-header">
+            💬 Chat AFP Prima
+            <button class="close-chat" onclick="toggleChat()">×</button>
+        </div>
+        
+        <div id="connectionStatus" class="connection-status status-offline">
+            🔴 Verificando conexión...
+        </div>
+        
+        <div id="chatMessages" class="chat-messages">
+            <div class="message bot">
+                ¡Hola! Soy tu asistente virtual de AFP Prima. ¿En qué puedo ayudarte hoy?
+            </div>
+        </div>
+        
+        <div id="typingIndicator" class="typing-indicator">
+            El asistente está escribiendo...
+        </div>
+        
+        <div class="chat-input-container">
+            <textarea 
+                id="chatInput" 
+                class="chat-input" 
+                placeholder="Escribe tu consulta..."
+                onkeypress="handleKeyPress(event)"
+                rows="1"
+            ></textarea>
+            <button id="sendBtn" class="send-btn" onclick="sendMessage()">
+                ➤
+            </button>
+        </div>
+    </div>
+
+    <script>
         let chatOpen = false;
         let messageCount = 0;
         let conversationHistory = [];
@@ -59,14 +310,11 @@
 
         function toggleChat() {
             const chatWindow = document.getElementById('chatWindow');
-            const chatButton = document.querySelector('.chat-button');
-
             chatOpen = !chatOpen;
 
             if (chatOpen) {
                 chatWindow.classList.add('show');
                 document.getElementById('chatInput').focus();
-                chatButton.style.setProperty('--notification', 'none');
                 trackEvent('chat_opened');
             } else {
                 chatWindow.classList.remove('show');
@@ -261,3 +509,5 @@
             backendUrl: CONFIG.BACKEND_PROXY_URL
         });
     </script>
+</body>
+</html>
