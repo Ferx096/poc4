@@ -78,7 +78,7 @@ def direct_search_query(msg: func.QueueMessage, outputQueueItem: func.Out[str]) 
         logging.error(f"Error en direct_search_query: {str(e)}")
 
 @app.function_name(name="HealthCheck")
-@app.route(route="health", methods=["GET"])
+@app.route(route="health", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
 def health_check(req: func.HttpRequest) -> func.HttpResponse:
     """
     Endpoint de verificación de salud
