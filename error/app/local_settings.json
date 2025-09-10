@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "STORAGE_CONNECTION__queueServiceUri": "https://storagefunctionpoc4.queue.core.windows.net",
+    "STORAGE_CONNECTION": "YOU-API",
+    "PROJECT_CONNECTION_STRING": "InstrumentationKey=your-key;IngestionEndpoint=https://poc4-chatbotke.services.ai.azure.com/;LiveEndpoint=https://poc4-chatbotke.services.ai.azure.com/",
+    "PROJECT_ENDPOINT": "https://poc4-chatbotke.services.ai.azure.com/api/projects/project_poc4",
+    "EXISTING_AGENT_ID": "asst_en6V1SeMASo2plGkQqMictdi",
+    "SEARCH_ENDPOINT": "https://storage-poc.search.windows.net",
+    "SEARCH_INDEX_NAME": "index-poc4",
+    "AzureWebJobsStorage": "API"
+}
+}
